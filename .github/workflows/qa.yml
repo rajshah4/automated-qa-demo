@@ -1,0 +1,172 @@
+name: Automated QA
+
+# Two ways to trigger this:
+#
+# 1. workflow_dispatch — pick a scenario from the Actions tab. Best for demos
+#    and ad-hoc reruns.
+#
+# 2. pull_request — opens automatically on PRs that touch scenario or service
+#    files. Maps the changed paths to the right scenario and agent.
+#
+# Both paths produce the same outputs: a GitHub Actions artifact bundle you
+# can download, plus a PR comment (when triggered by a PR) linking to the
+# artifact and the OpenHands conversation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Which scenario to run
+        required: true
+        type: choice
+        options:
+          - scenarios/01_api_pr_update
+          - scenarios/02_api_new_generation
+          - scenarios/03_ui_workflow
+  pull_request:
+    paths:
+      - 'scenarios/**'
+      - 'skills/**'
+      - 'AGENTS.md'
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # to post comments
+    steps:
+      - name: Check out PR / branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install client-side deps
+        run: pip install httpx python-dotenv
+
+      # -----------------------------------------------------------------
+      # Pick which scenario to run.
+      # - workflow_dispatch: use the input value directly.
+      # - pull_request: choose the most-changed scenario folder, falling
+      #   back to scenarios/01_api_pr_update if nothing matches.
+      # -----------------------------------------------------------------
+      - name: Decide scenario
+        id: scenario
+        env:
+          INPUT_SCENARIO: ${{ inputs.scenario }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${INPUT_SCENARIO:-}" ]]; then
+            scenario="$INPUT_SCENARIO"
+          else
+            # Find which scenario folder the PR touched the most.
+            git fetch --no-tags --depth=50 origin "$PR_BASE_SHA"
+            changed=$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA" || true)
+            scenario=$(echo "$changed" \
+              | grep -oE '^scenarios/[0-9]+_[a-z_]+' \
+              | sort | uniq -c | sort -rn | head -1 \
+              | awk '{print $2}')
+            scenario=${scenario:-scenarios/01_api_pr_update}
+          fi
+
+          case "$scenario" in
+            scenarios/03_ui_workflow*) agent=ui_qa_agent ;;
+            *)                         agent=api_qa_agent ;;
+          esac
+
+          echo "Picked scenario: $scenario (agent: $agent)"
+          echo "path=$scenario"  >> "$GITHUB_OUTPUT"
+          echo "agent=$agent"    >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------
+      # Kick off the OpenHands conversation and block until it finishes.
+      # Emits conversation_id, duration_seconds, cost_usd to $GITHUB_OUTPUT.
+      # -----------------------------------------------------------------
+      - name: Run QA conversation
+        id: agent
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+          OPENHANDS_BASE_URL: https://app.all-hands.dev
+          DEMO_REPO: ${{ github.repository }}
+          DEMO_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          python -m agents.${{ steps.scenario.outputs.agent }} \
+            --scenario "${{ steps.scenario.outputs.path }}" \
+            --wait
+
+      # -----------------------------------------------------------------
+      # Pull every artifact the agent produced inside the sandbox.
+      # -----------------------------------------------------------------
+      - name: Fetch artifacts from sandbox
+        id: fetch
+        env:
+          OPENHANDS_API_KEY: ${{ secrets.OPENHANDS_API_KEY }}
+          OPENHANDS_BASE_URL: https://app.all-hands.dev
+        run: |
+          python -m agents.fetch_artifacts "${{ steps.agent.outputs.conversation_id }}"
+          ls -la "artifacts/${{ steps.agent.outputs.conversation_id }}"
+          echo "path=artifacts/${{ steps.agent.outputs.conversation_id }}" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------
+      # Make the artifacts downloadable from the Actions tab.
+      # -----------------------------------------------------------------
+      - name: Upload artifacts
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-${{ steps.agent.outputs.conversation_id }}
+          path: ${{ steps.fetch.outputs.path }}
+          if-no-files-found: warn
+          retention-days: 30
+
+      # -----------------------------------------------------------------
+      # Post the result as a PR comment so reviewers see it inline.
+      # No-op on workflow_dispatch (no PR context).
+      # -----------------------------------------------------------------
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          SCENARIO: ${{ steps.scenario.outputs.path }}
+          CONVERSATION_URL: ${{ steps.agent.outputs.conversation_url }}
+          DURATION: ${{ steps.agent.outputs.duration_seconds }}
+          COST: ${{ steps.agent.outputs.cost_usd }}
+          STATUS: ${{ steps.agent.outputs.execution_status }}
+          ARTIFACT_NAME: qa-${{ steps.agent.outputs.conversation_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          script: |
+            const {
+              SCENARIO, CONVERSATION_URL, DURATION, COST,
+              STATUS, ARTIFACT_NAME, RUN_URL,
+            } = process.env;
+
+            const mins = Math.floor(DURATION / 60);
+            const secs = String(DURATION % 60).padStart(2, '0');
+            const emoji = STATUS === 'finished' ? '✅' : '⚠️';
+
+            const body = [
+              `${emoji} **Automated QA — \`${SCENARIO}\`**`,
+              '',
+              `| | |`,
+              `|---|---|`,
+              `| Status   | \`${STATUS}\` |`,
+              `| Duration | ${mins}m ${secs}s |`,
+              `| Cost     | $${COST} |`,
+              `| Conversation | [${CONVERSATION_URL}](${CONVERSATION_URL}) |`,
+              `| Artifacts | [\`${ARTIFACT_NAME}\`](${RUN_URL}#artifacts) |`,
+              '',
+              '_Generated by an AI agent (OpenHands) on this PR._',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

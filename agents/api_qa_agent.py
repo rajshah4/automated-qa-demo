@@ -31,6 +31,7 @@ except ImportError:
     pass
 
 from agents._client import OpenHandsClient
+from agents._ci import emit as ci_emit
 from agents.runs import log_run
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -196,6 +197,8 @@ def main() -> int:
 
         url = client.conversation_url(app_id)
         print(f"Conversation started: {url}")
+        ci_emit("conversation_id", app_id)
+        ci_emit("conversation_url", url)
 
         # Snapshot a row now so the run is logged even if the user Ctrl-Cs
         # before it finishes. Refresh it at the end if --wait was passed.
@@ -211,6 +214,9 @@ def main() -> int:
                 f"duration={int(duration // 60)}m{int(duration % 60):02d}s "
                 f"cost=${row.get('cost_usd') or 0:.4f}"
             )
+            ci_emit("execution_status", row.get("execution_status") or "")
+            ci_emit("duration_seconds", str(int(duration)))
+            ci_emit("cost_usd", f"{row.get('cost_usd') or 0:.4f}")
 
     return 0
 
