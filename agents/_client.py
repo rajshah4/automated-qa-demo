@@ -82,6 +82,42 @@ class OpenHandsClient:
         response.raise_for_status()
         return response.json()
 
+    def get_conversation(self, app_conversation_id: str) -> dict[str, Any] | None:
+        """GET /api/v1/app-conversations?ids=<id> — fetch a single conversation."""
+        response = self._client.get(
+            "/api/v1/app-conversations",
+            params={"ids": app_conversation_id},
+        )
+        response.raise_for_status()
+        body = response.json()
+        items = body if isinstance(body, list) else body.get("items") or []
+        return items[0] if items else None
+
+    def wait_until_finished(
+        self,
+        app_conversation_id: str,
+        *,
+        interval_seconds: float = 5.0,
+        max_seconds: float = 1800.0,
+    ) -> dict[str, Any]:
+        """Poll a conversation until `execution_status` is a terminal state.
+
+        Terminal states observed in the V1 API: 'finished', 'failed',
+        'stopped', 'cancelled'. Anything else is treated as still running.
+        """
+        terminal = {"finished", "failed", "stopped", "cancelled"}
+        deadline = time.monotonic() + max_seconds
+        while True:
+            conv = self.get_conversation(app_conversation_id)
+            if conv and (conv.get("execution_status") or "").lower() in terminal:
+                return conv
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Conversation {app_conversation_id} did not reach a "
+                    f"terminal state within {max_seconds:.0f}s.",
+                )
+            time.sleep(interval_seconds)
+
     def get_start_task(self, task_id: str) -> dict[str, Any] | None:
         """GET /api/v1/app-conversations/start-tasks?ids=<task_id>
 

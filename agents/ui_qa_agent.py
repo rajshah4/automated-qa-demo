@@ -27,6 +27,7 @@ except ImportError:
     pass
 
 from agents._client import OpenHandsClient
+from agents.runs import log_run
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -147,6 +148,11 @@ def main() -> int:
         action="store_true",
         help="Print the prompt that would be sent and exit. Does not call the API.",
     )
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="Block until the conversation finishes and print final timing + cost.",
+    )
     args = parser.parse_args()
 
     scenario_dir = (REPO_ROOT / args.scenario).resolve()
@@ -189,6 +195,19 @@ def main() -> int:
 
         url = client.conversation_url(app_id)
         print(f"Conversation started: {url}")
+
+        scenario_rel = str(scenario_dir.relative_to(REPO_ROOT))
+        log_run(app_id, scenario=scenario_rel, wait=False, client=client)
+
+        if args.wait:
+            print("Waiting for conversation to finish…")
+            row = log_run(app_id, scenario=scenario_rel, wait=True, client=client)
+            duration = row.get("duration_seconds") or 0
+            print(
+                f"Done: status={row.get('execution_status')} "
+                f"duration={int(duration // 60)}m{int(duration % 60):02d}s "
+                f"cost=${row.get('cost_usd') or 0:.4f}"
+            )
 
     return 0
 

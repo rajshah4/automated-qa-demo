@@ -1,5 +1,6 @@
 .env
 .venv/
+runs.jsonl
 __pycache__/
 *.pyc
 .pytest_cache/
