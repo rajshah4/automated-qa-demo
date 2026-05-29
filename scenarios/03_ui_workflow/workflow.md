@@ -69,6 +69,11 @@ of these (the agent picks the most informative one):
   image is a good catch.
 - The **`performance_glitch_user`** account — pages load slowly. A spec
   with a tight timeout that documents the expectation.
+- **Sort by Price (low → high)** — on the inventory page there is a sort
+  dropdown (`product_sort_container`). Selecting "Price (low to high)"
+  must re-order the visible product cards by ascending price. A spec
+  should read the price text from each `.inventory_item_price` element
+  after sorting and assert the list is non-decreasing.
 
 ## Out of scope
 
