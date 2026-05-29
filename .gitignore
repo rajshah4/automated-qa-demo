@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+node_modules/
+playwright-report/
+test-results/
+scenarios/03_ui_workflow/recordings/*.webm
+scenarios/03_ui_workflow/recordings/*.mp4
+scenarios/03_ui_workflow/recordings/*.gif
+scenarios/03_ui_workflow/recordings/*.zip
+!scenarios/03_ui_workflow/recordings/.gitkeep
