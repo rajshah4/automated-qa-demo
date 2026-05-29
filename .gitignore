@@ -2,15 +2,25 @@
 .venv/
 runs.jsonl
 artifacts/
+
+# Playwright runtime outputs — produced by the agent during a QA run,
+# fetched out of the sandbox as CI artifacts. We keep the parent
+# directories tracked via .gitkeep so the agent doesn't have to create
+# them, but the contents themselves are runtime data.
+**/playwright-report/*
+!**/playwright-report/.gitkeep
+**/test-results/*
+!**/test-results/.gitkeep
+**/node_modules/
+
+# rrweb recordings and other large UI captures.
+scenarios/*/recordings/*.webm
+scenarios/*/recordings/*.mp4
+scenarios/*/recordings/*.gif
+scenarios/*/recordings/*.zip
+!scenarios/*/recordings/.gitkeep
+
 __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
-node_modules/
-playwright-report/
-test-results/
-scenarios/03_ui_workflow/recordings/*.webm
-scenarios/03_ui_workflow/recordings/*.mp4
-scenarios/03_ui_workflow/recordings/*.gif
-scenarios/03_ui_workflow/recordings/*.zip
-!scenarios/03_ui_workflow/recordings/.gitkeep
