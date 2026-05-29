@@ -1,12 +1,18 @@
 """Pull artifacts from a finished conversation's sandbox to your local disk.
 
-Useful when the agent's output (generated specs, recordings, reports) lives
-inside the sandbox and you want to inspect or commit it locally.
+What this collects, scenario-agnostic:
 
-CLI:
-    python -m agents.fetch_artifacts <conversation_id> [--dest PATH]
+1. /tmp/qa-report.md            — the agent's narrative report
+2. <repo>/changes.diff          — `git diff HEAD` inside the sandbox repo,
+                                  i.e. exactly what the agent changed to
+                                  files that were already tracked
+3. <repo>/git-status.txt        — `git status --short` (lists untracked
+                                  files too, so we know what to pull)
+4. New untracked files under    — generated specs, recordings, fresh test
+   scenarios/*/                   files, anything the agent created
 
-Default dest is `./artifacts/<conversation_id>/`.
+Useful both locally (`python -m agents.fetch_artifacts <conversation_id>`)
+and inside the CI workflow (called by .github/workflows/qa.yml).
 """
 
 from __future__ import annotations
@@ -14,6 +20,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 try:
     from dotenv import load_dotenv
@@ -25,28 +32,29 @@ except ImportError:
 import httpx
 
 from agents._client import OpenHandsClient
+from agents._ci import emit as ci_emit
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _agent_server(conv: dict) -> tuple[str, str]:
+def _agent_server(conv: dict[str, Any]) -> tuple[str, str]:
     session_key = conv["session_api_key"]
     base = conv["conversation_url"].rsplit("/api/conversations", 1)[0]
     return base, session_key
 
 
-def _bash(client: httpx.Client, command: str) -> dict:
+def _bash(client: httpx.Client, command: str) -> str:
+    """Run a bash command in the sandbox and return its stdout (never None)."""
     r = client.post("/api/bash/execute_bash_command", json={"command": command})
     r.raise_for_status()
-    return r.json()
+    out = r.json() or {}
+    return (out.get("stdout") or "") + (
+        ("\nSTDERR:" + out["stderr"]) if out.get("stderr") else ""
+    )
 
 
-def _download_bytes(client: httpx.Client, abs_path: str) -> bytes | None:
-    """Download a file from the sandbox. Returns None if missing.
-
-    The agent server expects the path as a query param, not a URL path
-    segment: GET /api/file/download?path=/abs/path/to/file
-    """
+def _download(client: httpx.Client, abs_path: str) -> bytes | None:
+    """GET /api/file/download?path=... — returns bytes or None if missing."""
     r = client.get("/api/file/download", params={"path": abs_path})
     if r.status_code == 404:
         return None
@@ -54,7 +62,29 @@ def _download_bytes(client: httpx.Client, abs_path: str) -> bytes | None:
     return r.content
 
 
-def fetch(conversation_id: str, dest: Path) -> None:
+def _save(target: Path, blob: bytes | None, src_label: str) -> None:
+    if blob is None:
+        print(f"  MISS  {src_label}")
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(blob)
+    print(f"  OK    {src_label}  →  {target.relative_to(REPO_ROOT)}  ({len(blob)} B)")
+
+
+def _find_repo_path(sb: httpx.Client) -> str | None:
+    """Locate the cloned repo inside the sandbox. The path varies by
+    sandbox image, so we search rather than hardcoding."""
+    output = _bash(
+        sb,
+        "find /workspace -maxdepth 3 -type d -name 'automated-qa-demo' "
+        "2>/dev/null | head -1",
+    )
+    path = output.strip().splitlines()[0] if output.strip() else ""
+    return path or None
+
+
+def fetch(conversation_id: str, dest: Path) -> int:
+    """Pull all artifacts. Returns the count of files saved."""
     with OpenHandsClient() as c:
         conv = c.get_conversation(conversation_id)
     if not conv:
@@ -65,79 +95,72 @@ def fetch(conversation_id: str, dest: Path) -> None:
     print(f"Status:   {conv.get('execution_status')}")
     print(f"Dest:     {dest}")
     dest.mkdir(parents=True, exist_ok=True)
+    saved = 0
 
     with httpx.Client(
         base_url=agent_base,
         headers={"X-Session-API-Key": session_key, "Accept": "application/json"},
         timeout=120,
     ) as sb:
-        # 1. Locate the workspace root (varies by sandbox image).
-        pwd = _bash(sb, "echo WS=$PWD; ls /workspace 2>/dev/null | head; ls / 2>/dev/null | head")
-        print("\n--- Sandbox probe ---")
-        print(pwd.get("stdout", ""))
-        if pwd.get("stderr"):
-            print("stderr:", pwd["stderr"][:200])
-
-        # 2. Find candidate files: report, generated specs, recordings.
-        targets = _bash(
-            sb,
-            "ls -la /tmp/qa-report.md 2>/dev/null; "
-            "find / -maxdepth 6 -type d -name 'generated_specs' 2>/dev/null; "
-            "find / -maxdepth 6 -type d -name 'recordings' 2>/dev/null",
-        )
-        print("\n--- Targets ---")
-        print(targets.get("stdout", ""))
-
-        # 3. Try a known common workspace path; the agent works in
-        #    /workspace/<repo-name>. Fall back to a find if needed.
-        listing = _bash(
-            sb,
-            "REPO=$(find /workspace -maxdepth 2 -type d -name 'automated-qa-demo' 2>/dev/null | head -1); "
-            "echo REPO=$REPO; "
-            "ls -la $REPO/scenarios/03_ui_workflow/generated_specs $REPO/scenarios/03_ui_workflow/recordings 2>/dev/null",
-        )
-        print("\n--- Scenario 3 contents ---")
-        print(listing.get("stdout", ""))
-
-        # Derive the repo path from the probe output.
-        repo_path = None
-        for line in listing.get("stdout", "").splitlines():
-            if line.startswith("REPO="):
-                repo_path = line.split("=", 1)[1].strip() or None
-                break
+        repo_path = _find_repo_path(sb)
         if not repo_path:
-            print("Could not locate repo in sandbox; aborting download.")
-            return
+            print("Could not locate the repo inside the sandbox.")
+            return 0
+        print(f"Repo:     {repo_path}\n")
 
-        # 4. Download the report and any spec/recording files.
-        wanted = [
-            ("/tmp/qa-report.md", dest / "qa-report.md"),
-        ]
-        specs_dir = f"{repo_path}/scenarios/03_ui_workflow/generated_specs"
-        recordings_dir = f"{repo_path}/scenarios/03_ui_workflow/recordings"
+        # ---------------- /tmp/qa-report.md ----------------
+        print("--- Report ---")
+        blob = _download(sb, "/tmp/qa-report.md")
+        _save(dest / "qa-report.md", blob, "/tmp/qa-report.md")
+        if blob is not None:
+            saved += 1
 
-        for sandbox_dir, local_dir_name in (
-            (specs_dir, "generated_specs"),
-            (recordings_dir, "recordings"),
-        ):
-            names = _bash(sb, f"ls -1 {sandbox_dir} 2>/dev/null")
-            for name in names.get("stdout", "").splitlines():
-                name = name.strip()
-                if not name or name == ".gitkeep":
+        # ---------------- git diff + status ----------------
+        # Capture changes to tracked files (API scenarios mostly produce
+        # diffs to existing test files), plus a list of new files.
+        print("\n--- Git changes ---")
+        diff = _bash(sb, f"cd {repo_path} && git diff HEAD")
+        (dest / "changes.diff").write_text(diff, encoding="utf-8")
+        print(f"  OK    git diff HEAD  →  changes.diff  ({len(diff)} B)")
+        saved += 1
+
+        status = _bash(sb, f"cd {repo_path} && git status --short")
+        (dest / "git-status.txt").write_text(status, encoding="utf-8")
+        print(f"  OK    git status     →  git-status.txt  ({len(status)} B)")
+        saved += 1
+
+        # ---------------- Untracked files under scenarios/ ----------------
+        # These are files the agent created from scratch (e.g. UI specs,
+        # recordings, brand-new test_*.py files). We list them and pull
+        # each one. .gitkeep placeholders are skipped.
+        print("\n--- New artifacts under scenarios/ ---")
+        new_files = _bash(
+            sb,
+            f"cd {repo_path} && "
+            "git ls-files --others --exclude-standard scenarios/ | "
+            "grep -v '/.gitkeep$' || true",
+        ).strip()
+        if not new_files:
+            print("  (none)")
+        else:
+            for rel in new_files.splitlines():
+                rel = rel.strip()
+                if not rel:
                     continue
-                wanted.append(
-                    (f"{sandbox_dir}/{name}", dest / local_dir_name / name),
-                )
+                blob = _download(sb, f"{repo_path}/{rel}")
+                _save(dest / rel, blob, rel)
+                if blob is not None:
+                    saved += 1
 
-        print(f"\n--- Downloading {len(wanted)} files ---")
-        for src, target in wanted:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            blob = _download_bytes(sb, src)
-            if blob is None:
-                print(f"  MISS  {src}")
-                continue
-            target.write_bytes(blob)
-            print(f"  OK    {src}  →  {target.relative_to(REPO_ROOT)} ({len(blob)} bytes)")
+        # ---------------- runs.jsonl, in case it accumulated rows ----------
+        print("\n--- runs.jsonl (if present) ---")
+        blob = _download(sb, f"{repo_path}/runs.jsonl")
+        _save(dest / "runs.jsonl", blob, "runs.jsonl")
+        if blob is not None:
+            saved += 1
+
+    print(f"\nSaved {saved} files to {dest}")
+    return saved
 
 
 def main() -> int:
@@ -156,7 +179,9 @@ def main() -> int:
         if args.dest
         else REPO_ROOT / "artifacts" / args.conversation_id
     )
-    fetch(args.conversation_id, dest)
+    saved = fetch(args.conversation_id, dest)
+    ci_emit("artifacts_dir", str(dest))
+    ci_emit("artifacts_count", str(saved))
     return 0
 
 
