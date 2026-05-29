@@ -23,7 +23,9 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # override=True so .env wins over stale shell env vars (e.g. an empty
+    # DEMO_REPO left over from a previous `set -a; . ./.env` session).
+    load_dotenv(override=True)
 except ImportError:
     # python-dotenv is optional; if it's not installed, fall back to plain env.
     pass

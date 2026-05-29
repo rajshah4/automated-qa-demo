@@ -83,13 +83,20 @@ class OpenHandsClient:
         return response.json()
 
     def get_start_task(self, task_id: str) -> dict[str, Any] | None:
-        """GET /api/v1/app-conversations/start-tasks?ids=<task_id>"""
+        """GET /api/v1/app-conversations/start-tasks?ids=<task_id>
+
+        Returns a list of task dicts (one per id queried), or None if the
+        list is empty. We always query for a single id, so this returns the
+        first element when present.
+        """
         response = self._client.get(
             "/api/v1/app-conversations/start-tasks",
             params={"ids": task_id},
         )
         response.raise_for_status()
-        items = response.json().get("items") or []
+        body = response.json()
+        # Endpoint returns a bare list; some deployments wrap it in {"items": [...]}.
+        items = body if isinstance(body, list) else body.get("items") or []
         return items[0] if items else None
 
     def poll_until_ready(

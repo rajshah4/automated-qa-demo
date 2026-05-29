@@ -21,7 +21,8 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # override=True so .env wins over stale shell env vars.
+    load_dotenv(override=True)
 except ImportError:
     pass
 
