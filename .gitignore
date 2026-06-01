@@ -19,6 +19,9 @@ scenarios/*/recordings/*.mp4
 scenarios/*/recordings/*.gif
 scenarios/*/recordings/*.zip
 !scenarios/*/recordings/.gitkeep
+# Preview GIFs (committed by CI for inline PR comment embeds) are the
+# exception: they live in git so the raw.githubusercontent.com URLs work.
+!scenarios/*/recordings/preview-*.gif
 
 __pycache__/
 *.pyc
