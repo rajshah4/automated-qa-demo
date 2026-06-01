@@ -80,23 +80,34 @@ def _build_prompt(scenario_dir: Path) -> str:
         2. Read the skill at `skills/api-qa-conventions/SKILL.md`. **You must
            follow it.** It is the source of truth for how tests are written
            in this repo.
-        3. Read the PR description at `{pr_description_rel}` to understand
-           what the PR is trying to accomplish.
-        4. Read the patch at `{patch_rel}` to see the exact diff.
+        3. Read the PR description at `{pr_description_rel}` for intent.
+           Note: this file is a static demo asset; the *actual* diff for
+           this run comes from git (next step).
 
         ## What to do
 
         a. `cd` into `{service_dir_rel}`.
-        b. Install dependencies: `uv venv && uv pip install -e ".[test]"`.
+        b. **Determine the actual PR diff.** This repo runs in two modes:
+
+           - **PR-triggered (the common case):** the PR's changes are
+             already on the working branch. Run
+             `git diff origin/main...HEAD -- .` to see them. If that
+             produces a non-empty diff, you are in PR mode — DO NOT apply
+             the canned patch; the diff in front of you is your source of
+             truth.
+           - **Manual demo (workflow_dispatch with no PR):** the branch is
+             clean relative to main. In that case only, apply the canned
+             demo patch with `patch -p1 < ../../{patch_rel}`.
+
+           Pick the right mode by running the `git diff` above first.
+        c. Install dependencies: `uv venv && uv pip install -e ".[test]"`.
            If `uv` is not available, use `python -m venv .venv && source
            .venv/bin/activate && pip install -e ".[test]"`.
-        c. Apply the patch from `{patch_rel}`:
-           `patch -p1 < ../../{patch_rel}` (the patch is relative to the
-           service folder root).
-        d. Decide whether you are in the "update existing tests" path or the
-           "generate tests for a brand-new endpoint" path. The PR description
-           tells you which one. Follow the matching section of the
-           api-qa-conventions skill.
+        d. Decide whether you are in the "update existing tests" path or
+           the "generate tests for a brand-new endpoint" path. Inspect the
+           diff: does it modify an existing endpoint, or add a new one
+           whose `test_<name>.py` file does not yet exist? Follow the
+           matching section of the api-qa-conventions skill.
         e. Make the test changes. Keep edits minimal and on-convention.
         f. Run the test suite. The `YOUTUBE_API_KEY` secret should be
            available via the sandbox's secrets store; if it is not, tests
