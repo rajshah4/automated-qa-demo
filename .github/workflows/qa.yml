@@ -131,6 +131,10 @@ jobs:
       - name: Build GIF preview
         id: gif_build
         if: steps.scenario.outputs.agent == 'ui_qa_agent' && github.event_name == 'pull_request'
+        # A GIF prep hiccup must never block the PR comment / artifact
+        # upload that follow. continue-on-error lets the pipeline carry on
+        # if ffmpeg fails or no video was produced.
+        continue-on-error: true
         env:
           CONVERSATION_ID: ${{ steps.agent.outputs.conversation_id }}
           FETCH_PATH: ${{ steps.fetch.outputs.path }}
@@ -146,7 +150,11 @@ jobs:
           echo "Source video: $video"
           ls -lh "$video"
 
-          # ffmpeg is preinstalled on ubuntu-latest runners.
+          # ffmpeg isn't on the default ubuntu-latest runner image any
+          # more (removed in 2024). Install it; ~5 s.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
           # 2-pass palette generation for clean low-size output:
           #   640px wide, 8fps, 10s max → ~1-1.5 MB.
           mkdir -p .qa-tmp
