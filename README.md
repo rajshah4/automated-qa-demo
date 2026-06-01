@@ -37,21 +37,20 @@ All three are triggered the same way: a PR lands → the OpenHands Automation se
 
 ---
 
-## How it's built (the OpenHands angle)
+## How it's built
 
-This repo is intentionally *composed*, not custom-built. Every capability below is an off-the-shelf OpenHands feature:
+This repo is intentionally *composed*, not custom-built. Almost everything below is an off-the-shelf OpenHands feature; the demo-specific code is small and focused.
 
-| Capability | What it gives the demo |
-|---|---|
-| **OpenHands Automation service** | The PR-trigger layer. Webhook-triggered when your environment has public ingress; cron-poll-triggered when it doesn't. Both configs are shipped. See [`automations/`](./automations/). |
-| **OpenHands SDK + skills** | The agents themselves. The QA conventions and Playwright patterns are encoded as **skills** (markdown files), not Python code. Your team customizes the agent's behavior by editing markdown. See [`skills/`](./skills/). |
-| **BrowserToolSet (Playwright, shipped today)** | UI automation. Not a roadmap item — the agent drives a real Chromium browser using a tool that's already in the SDK. |
-| **rrweb browser session recording** | Every UI run produces a replayable recording attached to the PR comment. Built-in audit trail. |
-| **LLM profile store** | Model-agnostic. Swap between Claude, OpenAI, or any OpenAI-compatible local endpoint (vLLM, LiteLLM proxy, etc.) by changing one config file. See [`llm-profiles/`](./llm-profiles/). |
-| **Secrets store** | API keys (YouTube Data API), tokens (GitHub), test credentials — live in the OpenHands secrets store, never in code or env files. |
-| **Docker sandbox** | The agent server runs in an isolated container on your infrastructure. The demo can run entirely offline once configured. |
+| Capability | Where it lives | What it does |
+|---|---|---|
+| **V1 Conversation API** | [`agents/`](./agents/) | Conversation-starter scripts that POST a self-contained task prompt to OpenHands Cloud. The real work runs inside the conversation's own sandbox. No agent code ships to the sandbox — only a prompt. |
+| **Skills (markdown)** | [`skills/`](./skills/) | Behavior customization without code. Three skills auto-load via `AGENTS.md`: vendored `webapp-testing` (Anthropic), vendored `front-end-testing` (citypaul), and authored `api-qa-conventions` (this repo). Your team customizes the agent by editing markdown. |
+| **BrowserToolSet (Playwright)** | UI scenario | The sandbox already ships with a real Chromium and the OpenHands BrowserToolSet. The UI agent uses it via Playwright with `trace: 'on'`, `video: 'on'`, `screenshot: 'only-on-failure'`. |
+| **Sandbox secrets** | OpenHands platform | `YOUTUBE_API_KEY`, `GITHUB_TOKEN`, etc. live in the OpenHands secrets store and are injected into the sandbox at runtime. Never in code or `.env` files. |
+| **Docker sandbox** | OpenHands platform | The conversation runs in an isolated container with its own filesystem. The demo can run end-to-end without exposing the customer's network. |
+| **GitHub Actions glue** | [`.github/workflows/qa.yml`](./.github/workflows/qa.yml) | The PR-trigger layer for *this* demo. A single workflow detects which scenario was touched, starts the right conversation, fetches artifacts, builds an inline GIF preview for UI runs, and posts a status comment. Same code is the seed of an OpenHands Automation when you're ready to move off CI. |
 
-The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three pillars are covered by composition. There is almost no agent code in this repo. There is configuration, skills, scenarios, and a thin PR reporter.
+The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is one workflow, two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
 
 ---
 
@@ -60,76 +59,75 @@ The customer-facing summary: **self-hosted, model-agnostic, customizable** — a
 ```
 automated-qa-demo/
 ├── README.md                          # You are here
-├── automations/                       # OpenHands Automation service configs
-│   ├── api-qa-event-trigger.json      # Webhook-triggered (public ingress)
-│   ├── api-qa-cron-poll.json          # Cron-poll fallback (no public ingress)
-│   └── ui-qa-event-trigger.json
-├── llm-profiles/                      # Model-agnostic profiles
-│   ├── claude-sonnet.json
-│   ├── gpt5.json
-│   └── self-hosted-litellm.json
-├── skills/                            # Behavior customization (no code)
-│   ├── webapp-testing/                # Vendored from anthropics/skills
-│   ├── front-end-testing/             # Vendored from citypaul/.dotfiles
-│   └── api-qa-conventions/            # Authored for this demo (pytest + httpx)
-├── scenarios/
-│   ├── 01_api_pr_update/              # YouTube Data API wrapper service + the PR diff
-│   ├── 02_api_new_generation/         # A new endpoint with no tests
-│   └── 03_ui_workflow/                # saucedemo.com + workflow.md
-├── agents/
-│   ├── api_qa_agent.py                # Loads api-qa-conventions skill
-│   └── ui_qa_agent.py                 # Loads webapp-testing + front-end-testing skills
-├── reporters/
-│   └── pr_comment.py                  # Markdown bot comment (agent-canvas style)
+├── AGENTS.md                          # Auto-loaded by the OpenHands sandbox
+├── runs.jsonl                         # Local ledger of conversations + cost/timing
 ├── .github/workflows/
-│   ├── qa-api-on-pr.yml               # GH Actions handoff to Automation service
-│   └── qa-ui-on-pr.yml
+│   └── qa.yml                         # Single workflow: dispatch → fetch → GIF → comment
+├── agents/
+│   ├── api_qa_agent.py                # Starts the conversation for scenarios 1 & 2
+│   ├── ui_qa_agent.py                 # Starts the conversation for scenario 3
+│   ├── fetch_artifacts.py             # Pulls the sandbox's working tree post-run
+│   ├── runs.py                        # CLI for the runs.jsonl ledger
+│   ├── _client.py                     # Tiny V1 API client (httpx)
+│   ├── _ci.py                         # GITHUB_OUTPUT helpers
+│   └── README.md                      # How the conversation-starter pattern works
+├── skills/
+│   ├── api-qa-conventions/            # Authored — pytest + httpx + brownfield rules
+│   ├── webapp-testing/                # Vendored from anthropics/skills
+│   └── front-end-testing/             # Vendored from citypaul/.dotfiles
+├── scenarios/
+│   ├── 01_api_pr_update/              # YouTube wrapper service + PR diff (regionCode)
+│   ├── 02_api_new_generation/         # New /playlists endpoint with no tests
+│   └── 03_ui_workflow/                # saucedemo.com + natural-language workflow.md
 └── docs/
-    ├── architecture.md                # Diagram + data flow
-    ├── self-hosted-llm.md             # How to point at a local OpenAI-compatible endpoint
-    ├── security-and-audit.md          # rrweb, secrets, sandbox, persistence
-    ├── bitbucket-port.md              # 1-page mapping to Bitbucket Pipelines (future)
-    └── demo_script.md                 # Talking points + sample timing
+    └── from-the-customer.md           # Open design questions surfaced in demo calls
 ```
 
 ---
 
-## Quick start (for reviewers running the demo themselves)
+## Quick start
 
-> **Status:** see [`docs/runbook.md`](./docs/runbook.md) once Phase 1 lands. Until then this section is a placeholder.
+The demo is already wired up against `rajshah4/automated-qa-demo`. Three open PRs show the three scenarios live:
+
+| PR | Scenario | What happens when it opens |
+|---|---|---|
+| [#2](https://github.com/rajshah4/automated-qa-demo/pull/2) | API param change | Agent reads the diff, extends `test_search.py` with five new tests, runs the suite, posts results |
+| [#3](https://github.com/rajshah4/automated-qa-demo/pull/3) | Fresh API endpoint | Agent recognizes no `test_playlists.py` exists, generates one from scratch following the skill, runs the suite, posts results |
+| [#4](https://github.com/rajshah4/automated-qa-demo/pull/4) | UI workflow | Agent writes a Playwright spec, drives a real browser through saucedemo, captures video + traces + HTML report. PR comment embeds a 250 KB GIF replay inline |
+
+### Trigger a run yourself
+
+Three ways:
 
 ```bash
-# 1. Clone and install
-git clone <this repo>
-cd automated-qa-demo
-uv sync
+# 1. Open a PR that touches a scenario folder — workflow fires automatically.
+gh pr create --title "..." --body "..." --head my-branch --base main
 
-# 2. Configure secrets (YouTube API key, GitHub token)
-cp .env.example .env
-$EDITOR .env
+# 2. Manually dispatch a specific scenario from the Actions tab.
+gh workflow run qa.yml -f scenario=scenarios/03_ui_workflow
 
-# 3. Register the automation with your OpenHands instance
-./scripts/register-automations.sh
-
-# 4. Open a PR against the demo repo
-gh pr create --title "Add regionCode to /search" --body "..." --head demo/add-region-code
-
-# 5. Watch the agent comment back on the PR
+# 3. Run the conversation-starter locally against the OpenHands API.
+export OPENHANDS_API_KEY=...
+python -m agents.api_qa_agent --scenario scenarios/01_api_pr_update --wait
 ```
+
+The PR-triggered path is the customer-visible flow; the other two are for development.
+
+### What you'll see on a PR
+
+- Status table (duration, cost, conversation URL, artifact bundle link)
+- For UI scenarios: an inline auto-playing GIF of the test run + the full Playwright HTML report, traces, and HD `.webm` videos in the downloadable artifact bundle
+- For API scenarios: the modified/created test files in the artifact bundle, with a `qa-report.md` explaining what the agent did and why
 
 ---
 
-## Roadmap of this scaffold
+## What's next (open work surfaced by the demo)
 
-| Phase | Deliverable | Status |
-|---|---|---|
-| 1 | Top-level README + folder skeleton | ✅ this commit |
-| 2 | Skills (vendor 2, author 1) | ⏳ next |
-| 3 | Scenario 1 — existing API + PR | ⏳ |
-| 4 | Scenario 2 — new API | ⏳ |
-| 5 | Scenario 3 — UI workflow + session recording | ⏳ |
-| 6 | Agents (`api_qa_agent.py`, `ui_qa_agent.py`) | ⏳ |
-| 7 | Automation service configs (event + cron-poll) | ⏳ |
-| 8 | LLM profile store | ⏳ |
-| 9 | PR comment reporter | ⏳ |
-| 10 | Docs (architecture, self-hosted LLM, security, demo script) | ⏳ |
+These are real design questions, not vapor roadmap. They're documented in [`docs/from-the-customer.md`](./docs/from-the-customer.md) with provisional answers.
+
+- **Brownfield-first skill.** The current `api-qa-conventions` skill is good at greenfield tests; it needs an explicit "reconnaissance pass" that extends existing tests rather than writing new ones when the file already covers the endpoint.
+- **OpenHands Automation in place of GitHub Actions.** The current workflow is a fine demo seed but assumes GitHub Actions exists. The Automation service supports the same PR-trigger pattern with webhook *or* cron-poll, including air-gapped environments. Configs not yet shipped.
+- **LLM profile store.** Today the agent uses whatever model is configured on the OpenHands instance. A `llm-profiles/` directory of named configs (Claude / GPT / self-hosted LiteLLM endpoint) would make model swaps a one-line change.
+- **Commit generated tests back to the PR.** Today the agent's tests live in the artifact bundle; reviewers download them but don't see them in the diff. The natural next step is to push them as commits to the PR branch, the same way the GIF preview is committed.
+- **Bitbucket / GitLab port.** The workflow is GitHub-specific. A one-page mapping to Bitbucket Pipelines or GitLab CI keeps the demo portable.
+- **Architecture diagram + self-hosted LLM guide + security/audit doc.** All listed in [`docs/from-the-customer.md`](./docs/from-the-customer.md); none written yet.
