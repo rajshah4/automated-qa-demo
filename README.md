@@ -48,9 +48,17 @@ This repo is intentionally *composed*, not custom-built. Almost everything below
 | **BrowserToolSet (Playwright)** | UI scenario | The sandbox already ships with a real Chromium and the OpenHands BrowserToolSet. The UI agent uses it via Playwright with `trace: 'on'`, `video: 'on'`, `screenshot: 'only-on-failure'`. |
 | **Sandbox secrets** | OpenHands platform | `YOUTUBE_API_KEY`, `GITHUB_TOKEN`, etc. live in the OpenHands secrets store and are injected into the sandbox at runtime. Never in code or `.env` files. |
 | **Docker sandbox** | OpenHands platform | The conversation runs in an isolated container with its own filesystem. The demo can run end-to-end without exposing the customer's network. |
-| **GitHub Actions glue** | [`.github/workflows/qa.yml`](./.github/workflows/qa.yml) | The PR-trigger layer for *this* demo. A single workflow detects which scenario was touched, starts the right conversation, fetches artifacts, builds an inline GIF preview for UI runs, and posts a status comment. Same code is the seed of an OpenHands Automation when you're ready to move off CI. |
+| **OpenHands Automation** | (production target) | The PR-trigger layer. Watches the repo via GitHub webhook in connected environments, or via cron-poll in air-gapped ones. When a PR matches a configured pattern, the automation dispatches the right conversation, fetches artifacts, and posts the result back to the PR. **No CI YAML for the customer to maintain.** |
 
-The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is one workflow, two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
+The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
+
+> **Note on the PR trigger in this demo.** The Automation row above describes
+> how this runs in a customer environment. For *this* public demo repo we use
+> a GitHub Actions workflow ([`qa.yml`](./.github/workflows/qa.yml)) as a
+> functionally equivalent stand-in — same handoff to the V1 Conversation API,
+> same artifact fetch, same PR comment. The customer-visible behavior is
+> identical; Actions is the fastest way to demonstrate it on a public GitHub
+> repo.
 
 ---
 
@@ -118,16 +126,3 @@ The PR-triggered path is the customer-visible flow; the other two are for develo
 - Status table (duration, cost, conversation URL, artifact bundle link)
 - For UI scenarios: an inline auto-playing GIF of the test run + the full Playwright HTML report, traces, and HD `.webm` videos in the downloadable artifact bundle
 - For API scenarios: the modified/created test files in the artifact bundle, with a `qa-report.md` explaining what the agent did and why
-
----
-
-## What's next (open work surfaced by the demo)
-
-These are real design questions, not vapor roadmap. They're documented in [`docs/from-the-customer.md`](./docs/from-the-customer.md) with provisional answers.
-
-- **Brownfield-first skill.** The current `api-qa-conventions` skill is good at greenfield tests; it needs an explicit "reconnaissance pass" that extends existing tests rather than writing new ones when the file already covers the endpoint.
-- **OpenHands Automation in place of GitHub Actions.** The current workflow is a fine demo seed but assumes GitHub Actions exists. The Automation service supports the same PR-trigger pattern with webhook *or* cron-poll, including air-gapped environments. Configs not yet shipped.
-- **LLM profile store.** Today the agent uses whatever model is configured on the OpenHands instance. A `llm-profiles/` directory of named configs (Claude / GPT / self-hosted LiteLLM endpoint) would make model swaps a one-line change.
-- **Commit generated tests back to the PR.** Today the agent's tests live in the artifact bundle; reviewers download them but don't see them in the diff. The natural next step is to push them as commits to the PR branch, the same way the GIF preview is committed.
-- **Bitbucket / GitLab port.** The workflow is GitHub-specific. A one-page mapping to Bitbucket Pipelines or GitLab CI keeps the demo portable.
-- **Architecture diagram + self-hosted LLM guide + security/audit doc.** All listed in [`docs/from-the-customer.md`](./docs/from-the-customer.md); none written yet.
