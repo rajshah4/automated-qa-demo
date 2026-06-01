@@ -74,6 +74,16 @@ of these (the agent picks the most informative one):
   must re-order the visible product cards by ascending price. A spec
   should read the price text from each `.inventory_item_price` element
   after sorting and assert the list is non-decreasing.
+- **Cart badge increments after adding an item** — when a logged-in user
+  clicks **Add to cart** on any product card, the `.shopping_cart_badge`
+  on the top-right cart icon must appear and show "1". Adding a second
+  distinct product must increment it to "2". Removing an item (via the
+  **Remove** button on the same card) must decrement the badge, and
+  removing the last item must remove the badge element entirely (it's
+  only rendered when count > 0). This is the kind of state-leak that
+  trivially regresses when someone refactors the cart store, and the
+  badge is the only visible signal of cart contents on the inventory
+  page.
 
 ## Out of scope
 
