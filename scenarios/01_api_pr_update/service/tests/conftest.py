@@ -35,7 +35,15 @@ def client(youtube_api_key: str) -> TestClient:
 KNOWN_CHANNEL_ID = "UCBR8-60-B28hp2BmDPdntcQ"  # YouTube Spotlight
 KNOWN_VIDEO_QUERY = "youtube rewind 2018"
 
+# A known-stable playlist from the YouTube Spotlight channel.
+KNOWN_PLAYLIST_ID = "PLbpi6ZahtOH4vec4VIxczjwC4pY0jAPNC"  # "Knock, knock" playlist
+
 
 @pytest.fixture(scope="session")
 def known_channel_id() -> str:
     return KNOWN_CHANNEL_ID
+
+
+@pytest.fixture(scope="session")
+def known_playlist_id() -> str:
+    return KNOWN_PLAYLIST_ID
