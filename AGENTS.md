@@ -53,3 +53,32 @@ before doing any work.
 - Each scenario has its own `README.md` with run instructions.
 - The `agents/` folder contains the conversation-starter scripts that run
   *outside* the sandbox to invoke you.
+
+## Agent operational notes (populated by past runs)
+
+### Scenario 03 — UI QA (Playwright)
+
+- **Site under test:** `https://www.saucedemo.com/v1/`
+  - Login: `standard_user` / `secret_sauce`
+  - Key selectors: `#user-name`, `#password`, `#login-button`
+    (the login button is `<input type="submit">` — **not** a `<button>` element,
+    so `getByRole('button', {name:'Login'})` does NOT work; use `page.click('#login-button')` or
+    `page.locator('#login-button').click()`)
+  - Add-to-cart: `[data-test="add-to-cart-*"]`
+  - Cart badge: `.shopping_cart_badge` / `[data-test="shopping-cart-badge"]`
+
+- **Recordings / GIFs in git:** `.gitignore` only allows `preview-*.gif` in
+  `scenarios/03_ui_workflow/recordings/`. Plain `*.gif`, `*.webm`, `*.mp4` are excluded.
+  Always name files `preview-<name>.gif` before `git add`.
+
+- **ffmpeg:** Not pre-installed but can be obtained via `sudo apt-get install -y ffmpeg`.
+  Used to convert `.webm` recordings to GIF: `ffmpeg -i file.webm -vf "fps=8,scale=900:-1:flags=lanczos" preview-file.gif -y -loglevel quiet`
+
+- **Playwright install:** Run `npm install` in `scenarios/03_ui_workflow/`, then
+  `npx playwright install chromium --with-deps` to download the headless shell.
+
+- **QA start timestamp persistence:** Save `$(date +%s)` to `/tmp/qa_start.txt`
+  at the beginning of the run so the duration can be recomputed if the session
+  resumes mid-flight.
+
+- **Commit message convention:** `test(qa): Playwright specs + preview GIF via OpenHands Automation [skip ci]`
