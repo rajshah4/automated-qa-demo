@@ -18,8 +18,9 @@ before doing any work.
   - `skills/api-qa-conventions/SKILL.md` — pytest + httpx conventions for API tests.
   - `skills/webapp-testing/SKILL.md` — runtime Playwright pattern for UI work.
   - `skills/front-end-testing/SKILL.md` — quality bar for emitted UI specs.
-- **There is no "agent code"** in this repo other than thin conversation-starter
-  scripts in `agents/`. The behavior of QA work is encoded in the skills.
+- **There is no "agent code"** in this repo. The behavior of QA work is encoded
+  entirely in the skills. You are invoked by the OpenHands Automation whose
+  prompt lives in `automations/build_prompt.py`.
 
 ## How to behave when invoked
 
@@ -51,5 +52,5 @@ before doing any work.
 
 - The top-level [`README.md`](./README.md) is the customer-facing pitch.
 - Each scenario has its own `README.md` with run instructions.
-- The `agents/` folder contains the conversation-starter scripts that run
-  *outside* the sandbox to invoke you.
+- [`automations/README.md`](./automations/README.md) documents the registered
+  OpenHands Automation that invokes you.

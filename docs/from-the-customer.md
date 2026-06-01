@@ -107,8 +107,8 @@ PRs to update the skill files themselves. Skills get versioned, reviewed,
 merged like any other code. The customer's QA lead is in the loop.
 
 **Where it lands.** Part A is a one-paragraph addition to both
-`api-qa-conventions/SKILL.md` and the agent prompts in
-[`agents/api_qa_agent.py`](../agents/api_qa_agent.py). Part B is a future
+`api-qa-conventions/SKILL.md` and the automation prompt in
+[`automations/build_prompt.py`](../automations/build_prompt.py). Part B is a future
 phase.
 
 **Why this matters for the pitch.** This is the "model-agnostic" story

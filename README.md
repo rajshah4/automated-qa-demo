@@ -43,14 +43,13 @@ This repo is intentionally *composed*, not custom-built. Almost everything below
 
 | Capability | Where it lives | What it does |
 |---|---|---|
-| **V1 Conversation API** | [`agents/`](./agents/) | Conversation-starter scripts that POST a self-contained task prompt to OpenHands Cloud. The real work runs inside the conversation's own sandbox. No agent code ships to the sandbox — only a prompt. |
+| **OpenHands Automation** | [`automations/`](./automations/) | The PR-trigger layer. Registered on OpenHands Cloud — when the `openhands-qa` label is applied to a PR, the automation fires, detects the scenario, runs the full QA conversation, commits artifacts, and posts results. **No CI YAML to maintain.** |
 | **Skills (markdown)** | [`skills/`](./skills/) | Behavior customization without code. Three skills auto-load via `AGENTS.md`: vendored `webapp-testing` (Anthropic), vendored `front-end-testing` (citypaul), and authored `api-qa-conventions` (this repo). Your team customizes the agent by editing markdown. |
-| **BrowserToolSet (Playwright)** | UI scenario | The sandbox already ships with a real Chromium and the OpenHands BrowserToolSet. The UI agent uses it via Playwright with `trace: 'on'`, `video: 'on'`, `screenshot: 'only-on-failure'`. |
-| **Sandbox secrets** | OpenHands platform | `YOUTUBE_API_KEY`, `GITHUB_TOKEN`, etc. live in the OpenHands secrets store and are injected into the sandbox at runtime. Never in code or `.env` files. |
-| **Docker sandbox** | OpenHands platform | The conversation runs in an isolated container with its own filesystem. The demo can run end-to-end without exposing the customer's network. |
-| **OpenHands Automation** | (production target) | The PR-trigger layer. Watches the repo via GitHub webhook in connected environments, or via cron-poll in air-gapped ones. When a PR matches a configured pattern, the automation dispatches the right conversation, fetches artifacts, and posts the result back to the PR. **No CI YAML for the customer to maintain.** |
+| **BrowserToolSet (Playwright)** | UI scenario | The sandbox ships with a real Chromium and the OpenHands BrowserToolSet. The UI agent uses Playwright with `trace: 'on'`, `video: 'on'`, converts recordings to GIF previews. |
+| **Sandbox secrets** | OpenHands platform | `YOUTUBE_API_KEY`, `GITHUB_TOKEN`, etc. live in the OpenHands secrets store and are injected at runtime. Never in code or `.env` files. |
+| **Docker sandbox** | OpenHands platform | The conversation runs in an isolated container with its own filesystem. End-to-end without exposing the customer's network. |
 
-The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
+The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is one automation prompt, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
 
 > **OpenHands Automation is live on this repo.** Apply the `openhands-qa` label to any PR
 > and within ~2 seconds a registered OpenHands Cloud Automation fires:
@@ -60,10 +59,6 @@ The customer-facing summary: **self-hosted, model-agnostic, customizable** — a
 > report, and collapsible generated-file contents — everything visible without leaving the PR.
 >
 > Automation ID: `5d152cb1-bb58-4402-9839-063fd9e76fe5` — see [`automations/README.md`](./automations/README.md).
->
-> **Note:** A GitHub Actions workflow ([`qa.yml`](./.github/workflows/qa.yml)) is also present
-> in this repo as a reference implementation showing the same QA work driven from CI YAML.
-> It is not the focus of this demo.
 
 ---
 
@@ -73,17 +68,6 @@ The customer-facing summary: **self-hosted, model-agnostic, customizable** — a
 automated-qa-demo/
 ├── README.md                          # You are here
 ├── AGENTS.md                          # Auto-loaded by the OpenHands sandbox
-├── runs.jsonl                         # Local ledger of conversations + cost/timing
-├── .github/workflows/
-│   └── qa.yml                         # Single workflow: dispatch → fetch → GIF → comment
-├── agents/
-│   ├── api_qa_agent.py                # Starts the conversation for scenarios 1 & 2
-│   ├── ui_qa_agent.py                 # Starts the conversation for scenario 3
-│   ├── fetch_artifacts.py             # Pulls the sandbox's working tree post-run
-│   ├── runs.py                        # CLI for the runs.jsonl ledger
-│   ├── _client.py                     # Tiny V1 API client (httpx)
-│   ├── _ci.py                         # GITHUB_OUTPUT helpers
-│   └── README.md                      # How the conversation-starter pattern works
 ├── automations/
 │   └── README.md                      # Registered OpenHands Automation details + runbook
 ├── skills/
@@ -123,9 +107,6 @@ curl -s -X POST \
   "https://app.all-hands.dev/api/automation/v1/5d152cb1-bb58-4402-9839-063fd9e76fe5/dispatch" \
   -H "Authorization: Bearer $OPENHANDS_API_KEY"
 
-# 3. Run the conversation-starter locally against the OpenHands API.
-export OPENHANDS_API_KEY=...
-python -m agents.api_qa_agent --scenario scenarios/01_api_pr_update --wait
 ```
 
 The label-triggered Automation path is the customer-visible flow; options 2 and 3 are for development.
