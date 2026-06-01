@@ -29,9 +29,9 @@ The team keeps the tests the agent emits. They are not throwaway — they follow
 
 | # | Scenario | What the agent does | What the PR shows |
 |---|---|---|---|
-| 1 | **Existing API + PR adds a parameter** | Reads the diff, identifies which tests cover the changed endpoint, updates them to exercise the new parameter, runs the suite against the real API | Bot comment with updated test count + pass/fail table |
-| 2 | **Brand-new API endpoint with no tests** | Reads the endpoint definition, generates a test plan, writes pytest cases, runs them | Bot comment with the generated test plan + results |
-| 3 | **UI workflow described in natural language** | Drives a real browser via Playwright, generates a maintainable spec following accessibility-first conventions, runs it, records the session | Bot comment with status table, **recorded video**, and the generated spec file linked |
+| 1 | **Existing API + PR adds a parameter** | Reads the diff, identifies which tests cover the changed endpoint, updates them to exercise the new parameter, runs the suite against the real API | Test file committed to branch + 🤖 comment with full report and collapsible test code |
+| 2 | **Brand-new API endpoint with no tests** | Reads the endpoint definition, generates a test plan, writes pytest cases, runs them | New test file committed to branch + 🤖 comment with generated test plan and collapsible code |
+| 3 | **UI workflow described in natural language** | Drives a real browser via Playwright, generates a maintainable spec, runs it, records the session | Specs + GIF previews committed to branch + 🤖 comment with **inline GIF replays**, full report, and collapsible spec code |
 
 All three are triggered the same way: apply the `openhands-qa` label to a PR → the OpenHands Automation fires within ~2 seconds → the agent generates tests, commits them to the branch, and posts results back to the PR.
 
@@ -54,9 +54,10 @@ The customer-facing summary: **self-hosted, model-agnostic, customizable** — a
 
 > **OpenHands Automation is live on this repo.** Apply the `openhands-qa` label to any PR
 > and within ~2 seconds a registered OpenHands Cloud Automation fires:
-> it detects the scenario from the branch name, runs the full QA conversation (GPT-5.5),
-> commits the generated test files and GIF directly to the PR branch, and posts a
-> 🤖 **Automated QA (via OpenHands Automation)** comment with the results.
+> it detects the scenario from the PR's changed files, runs the full QA conversation,
+> commits the generated test files and GIF previews directly to the PR branch, and posts a
+> 🤖 **Automated QA (via OpenHands Automation)** comment with inline results, the full QA
+> report, and collapsible generated-file contents — everything visible without leaving the PR.
 >
 > Automation ID: `5d152cb1-bb58-4402-9839-063fd9e76fe5` — see [`automations/README.md`](./automations/README.md).
 >
@@ -101,31 +102,33 @@ automated-qa-demo/
 
 ## Quick start
 
-The demo is already wired up against `rajshah4/automated-qa-demo`. Three open PRs show the three scenarios live:
+The demo is already wired up against `rajshah4/automated-qa-demo`. Three open PRs show the three scenarios live — each has the `openhands-qa` label applied and a completed 🤖 comment:
 
-| PR | Scenario | What happens when it opens |
+| PR | Scenario | What the automation did |
 |---|---|---|
-| [#2](https://github.com/rajshah4/automated-qa-demo/pull/2) | API param change | Agent reads the diff, extends `test_search.py` with five new tests, runs the suite, posts results |
-| [#3](https://github.com/rajshah4/automated-qa-demo/pull/3) | Fresh API endpoint | Agent recognizes no `test_playlists.py` exists, generates one from scratch following the skill, runs the suite, posts results |
-| [#4](https://github.com/rajshah4/automated-qa-demo/pull/4) | UI workflow | Agent writes a Playwright spec, drives a real browser through saucedemo, captures video + traces + HTML report. PR comment embeds a 250 KB GIF replay inline |
+| [#14](https://github.com/rajshah4/automated-qa-demo/pull/14) | API param change (`regionCode` + `maxResults`) | Updated `test_search.py`, committed it to branch, posted 🤖 comment with full report + collapsible test code |
+| [#15](https://github.com/rajshah4/automated-qa-demo/pull/15) | Fresh API endpoint (`/playlists`) | Generated `test_playlists.py` from scratch, committed to branch, posted 🤖 comment with test plan + collapsible code |
+| [#16](https://github.com/rajshah4/automated-qa-demo/pull/16) | UI workflow (cart badge edge case) | Wrote Playwright specs, recorded session, committed specs + GIF previews to branch, posted 🤖 comment with **inline GIF replays** + collapsible spec files |
 
 ### Trigger a run yourself
 
-Three ways:
-
 ```bash
-# 1. Open a PR that touches a scenario folder — workflow fires automatically.
+# 1. Open a PR that touches a scenario folder, then apply the label — automation fires.
 gh pr create --title "..." --body "..." --head my-branch --base main
+gh pr edit <number> --add-label "openhands-qa"
 
-# 2. Manually dispatch a specific scenario from the Actions tab.
-gh workflow run qa.yml -f scenario=scenarios/03_ui_workflow
+# 2. Manually dispatch (no event payload — agent falls back to most-recently-labeled PR).
+source .env
+curl -s -X POST \
+  "https://app.all-hands.dev/api/automation/v1/5d152cb1-bb58-4402-9839-063fd9e76fe5/dispatch" \
+  -H "Authorization: Bearer $OPENHANDS_API_KEY"
 
 # 3. Run the conversation-starter locally against the OpenHands API.
 export OPENHANDS_API_KEY=...
 python -m agents.api_qa_agent --scenario scenarios/01_api_pr_update --wait
 ```
 
-The PR-triggered path is the customer-visible flow; the other two are for development.
+The label-triggered Automation path is the customer-visible flow; options 2 and 3 are for development.
 
 ### What you'll see on a PR
 
