@@ -33,7 +33,7 @@ The team keeps the tests the agent emits. They are not throwaway — they follow
 | 2 | **Brand-new API endpoint with no tests** | Reads the endpoint definition, generates a test plan, writes pytest cases, runs them | Bot comment with the generated test plan + results |
 | 3 | **UI workflow described in natural language** | Drives a real browser via Playwright, generates a maintainable spec following accessibility-first conventions, runs it, records the session | Bot comment with status table, **recorded video**, and the generated spec file linked |
 
-All three are triggered the same way: a PR lands → the OpenHands Automation service dispatches the right agent → the agent posts back to the PR.
+All three are triggered the same way: apply the `openhands-qa` label to a PR → the OpenHands Automation fires within ~2 seconds → the agent generates tests, commits them to the branch, and posts results back to the PR.
 
 ---
 
@@ -52,23 +52,17 @@ This repo is intentionally *composed*, not custom-built. Almost everything below
 
 The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
 
-> **Both trigger paths are live on this repo.** When a PR opens, two independent
-> pipelines fire in parallel:
+> **OpenHands Automation is live on this repo.** Apply the `openhands-qa` label to any PR
+> and within ~2 seconds a registered OpenHands Cloud Automation fires:
+> it detects the scenario from the branch name, runs the full QA conversation (GPT-5.5),
+> commits the generated test files and GIF directly to the PR branch, and posts a
+> 🤖 **Automated QA (via OpenHands Automation)** comment with the results.
 >
-> 1. **OpenHands Automation** (registered on OpenHands Cloud, automation ID
->    `5d152cb1-bb58-4402-9839-063fd9e76fe5`, model: GPT-5.5) — the
->    production-target architecture. Apply the `openhands-qa` label to any PR
->    and the automation fires within ~2 seconds, detects the scenario from the
->    changed files, runs the QA conversation, and posts a
->    🤖 **Automated QA (via OpenHands Automation)** comment to the PR.
+> Automation ID: `5d152cb1-bb58-4402-9839-063fd9e76fe5` — see [`automations/README.md`](./automations/README.md).
 >
-> 2. **GitHub Actions** ([`qa.yml`](./.github/workflows/qa.yml)) — kept as a
->    fallback and reference. Posts the ✅ **Automated QA —** comment.
->
-> Both comments appear on the same PR. Seeing them side-by-side is the demo:
-> the customer can compare the two trigger paths and confirm they produce
-> functionally equivalent results. See [`automations/README.md`](./automations/README.md)
-> for full details on the registered automation.
+> **Note:** A GitHub Actions workflow ([`qa.yml`](./.github/workflows/qa.yml)) is also present
+> in this repo as a reference implementation showing the same QA work driven from CI YAML.
+> It is not the focus of this demo.
 
 ---
 
