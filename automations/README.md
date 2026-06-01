@@ -1,11 +1,11 @@
 # OpenHands Automation — PR QA Trigger
 
 This directory documents the OpenHands Automation that runs the QA workflow
-whenever a pull request is opened on `rajshah4/automated-qa-demo`.
+whenever a PR on `rajshah4/automated-qa-demo` is labeled with `openhands-qa`.
 
-It is the **production-target architecture** for the demo — the same mechanism
-a customer would deploy. The GitHub Actions workflow (`qa.yml`) remains as a
-reference and fallback; both pipelines fire on the same PR.
+It is the **primary demo architecture** — the mechanism a customer would deploy.
+The GitHub Actions workflow (`qa.yml`) is retained as a reference implementation
+showing the same QA work driven from CI YAML; it is not the focus of the demo.
 
 ---
 
@@ -28,9 +28,10 @@ reference and fallback; both pipelines fire on the same PR.
 
 ## What it does when the label is applied
 
-1. **Detects which scenario the PR touches** — same heuristic as `qa.yml`'s
-   "Decide scenario" step: reads the PR's changed-file list via `gh pr view`,
-   then picks the most-affected `scenarios/<N>_<name>/` folder.
+1. **Detects which scenario the PR touches** — reads the PR's changed-file list
+   via `gh pr view` and matches to the most-affected `scenarios/<N>_<name>/`
+   folder. Branch name is used as a tiebreaker only when file paths are
+   ambiguous (e.g. scenario 02 shares the same service code as scenario 01).
 
 2. **Checks out the PR branch** — so the QA work runs against the actual
    in-flight change, not main.
@@ -42,16 +43,18 @@ reference and fallback; both pipelines fire on the same PR.
    `agents/api_qa_agent.py` (`_build_prompt`) or `agents/ui_qa_agent.py`
    (`_build_prompt`), depending on the detected scenario.
 
-5. **Posts a PR comment** — the comment is clearly marked as coming from the
-   OpenHands Automation so it is visually distinct from the Actions comment:
+5. **Commits artifacts back to the PR branch** — generated test files, Playwright
+   specs, `playwright.config.ts`, and GIF previews (converted from `.webm`
+   recordings via ffmpeg) are staged under `$SCENARIO/` and pushed with
+   `[skip ci]` to avoid re-triggering workflows.
+
+6. **Posts a PR comment** — includes an inline summary table, the full
+   `qa-report.md` in a collapsible block, and each generated file's full
+   contents in a collapsible block — everything readable without leaving the PR:
 
    ```
    🤖 Automated QA (via OpenHands Automation) — `<scenario>`
    ```
-
-   The Actions comment begins with `✅ Automated QA —`. Both appear on the
-   same PR. That's the demo: the customer sees two independent QA triggers
-   producing the same result.
 
 ---
 
@@ -100,38 +103,51 @@ the 🤖 comment.
 
 | | OpenHands Automation | GitHub Actions (`qa.yml`) |
 |---|---|---|
-| **Trigger** | `pull_request.opened` webhook via automation service | `pull_request` workflow event |
+| **Trigger** | `pull_request.labeled` (`openhands-qa`) via event webhook | `pull_request` workflow event (any PR) |
 | **QA work runs in** | OpenHands conversation sandbox | OpenHands conversation sandbox |
-| **Scenario detection** | Agent reads `gh pr view` output | Shell script using `gh pr view` |
-| **PR comment header** | 🤖 **Automated QA (via OpenHands Automation)** | ✅ **Automated QA —** |
-| **GIF preview (UI)** | Not included (text-only comment) | Committed to PR branch |
-| **Artifact bundle** | Not uploaded | Actions artifact (30-day retention) |
-| **Config to maintain** | Automation prompt in the service | `qa.yml` YAML |
-
-The Automation path omits the GIF and artifact bundle for simplicity — that's
-an intentional scope choice for the demo. The customer can see the QA summary
-and conversation link from the Automation comment; the full videos and reports
-are on the Actions side.
+| **Scenario detection** | File paths primary; branch name tiebreaker | Shell script using `gh pr view` |
+| **Artifacts committed** | ✅ test files, specs, GIF previews — pushed to PR branch | ✅ GIF preview — pushed to PR branch |
+| **PR comment** | 🤖 Full report + collapsible file contents + inline GIFs | ✅ Status table + conversation link + one GIF |
+| **qa-report.md** | ✅ Embedded inline (collapsible) | In downloadable artifact bundle |
+| **Full recording (.webm)** | Not uploaded | Actions artifact (30-day retention) |
+| **Config to maintain** | Automation prompt in the OpenHands service | `qa.yml` YAML |
 
 ---
 
 ## Re-registering the automation
 
-If the automation needs to be recreated, run:
+If the automation needs to be recreated from scratch, the prompt is maintained
+in `automations/build_prompt.py`. Run:
 
 ```bash
 source .env
-python3 /tmp/make_payload.py  # regenerates /tmp/automation-payload.json
+python3 automations/build_prompt.py   # writes /tmp/automation-payload.json
 curl -s -X POST "https://app.all-hands.dev/api/automation/v1/preset/prompt" \
   -H "Authorization: Bearer $OPENHANDS_API_KEY" \
   -H "Content-Type: application/json" \
   --data-binary @/tmp/automation-payload.json | python3 -m json.tool
 ```
 
-The prompt source is in `agents/api_qa_agent.py` and `agents/ui_qa_agent.py`
-(`_build_prompt` functions). The automation prompt is a meta-prompt that reads
-those functions at run time to get the current task specification, so updating
-the agent scripts automatically updates the QA work without re-registering.
+To update the prompt on the existing automation without re-registering:
+
+```bash
+source .env
+python3 automations/build_prompt.py
+python3 -c "
+import json
+p = json.load(open('/tmp/automation-payload.json'))
+open('/tmp/patch.json','w').write(json.dumps({'prompt': p['prompt']}))
+"
+curl -s -X PATCH \
+  "https://app.all-hands.dev/api/automation/v1/5d152cb1-bb58-4402-9839-063fd9e76fe5" \
+  -H "Authorization: Bearer $OPENHANDS_API_KEY" \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/patch.json | python3 -m json.tool
+```
+
+The prompt is a meta-prompt: it reads `agents/api_qa_agent.py` and
+`agents/ui_qa_agent.py` at run time to get the current task specification,
+so updating those scripts updates the QA work without touching the automation.
 
 ---
 
