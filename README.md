@@ -52,13 +52,23 @@ This repo is intentionally *composed*, not custom-built. Almost everything below
 
 The customer-facing summary: **self-hosted, model-agnostic, customizable** — all three are covered by composition. The whole repo is two thin conversation-starter scripts, three skills, and the scenario fixtures. There is no bespoke agent runtime to maintain.
 
-> **Note on the PR trigger in this demo.** The Automation row above describes
-> how this runs in a customer environment. For *this* public demo repo we use
-> a GitHub Actions workflow ([`qa.yml`](./.github/workflows/qa.yml)) as a
-> functionally equivalent stand-in — same handoff to the V1 Conversation API,
-> same artifact fetch, same PR comment. The customer-visible behavior is
-> identical; Actions is the fastest way to demonstrate it on a public GitHub
-> repo.
+> **Both trigger paths are live on this repo.** When a PR opens, two independent
+> pipelines fire in parallel:
+>
+> 1. **OpenHands Automation** (registered on OpenHands Cloud, automation ID
+>    `5d152cb1-bb58-4402-9839-063fd9e76fe5`, model: GPT-5.5) — the
+>    production-target architecture. Apply the `openhands-qa` label to any PR
+>    and the automation fires within ~2 seconds, detects the scenario from the
+>    changed files, runs the QA conversation, and posts a
+>    🤖 **Automated QA (via OpenHands Automation)** comment to the PR.
+>
+> 2. **GitHub Actions** ([`qa.yml`](./.github/workflows/qa.yml)) — kept as a
+>    fallback and reference. Posts the ✅ **Automated QA —** comment.
+>
+> Both comments appear on the same PR. Seeing them side-by-side is the demo:
+> the customer can compare the two trigger paths and confirm they produce
+> functionally equivalent results. See [`automations/README.md`](./automations/README.md)
+> for full details on the registered automation.
 
 ---
 
@@ -79,6 +89,8 @@ automated-qa-demo/
 │   ├── _client.py                     # Tiny V1 API client (httpx)
 │   ├── _ci.py                         # GITHUB_OUTPUT helpers
 │   └── README.md                      # How the conversation-starter pattern works
+├── automations/
+│   └── README.md                      # Registered OpenHands Automation details + runbook
 ├── skills/
 │   ├── api-qa-conventions/            # Authored — pytest + httpx + brownfield rules
 │   ├── webapp-testing/                # Vendored from anthropics/skills
