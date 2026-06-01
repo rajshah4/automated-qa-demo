@@ -77,3 +77,5 @@ This is the customer's #1 stated use case ("Existing API changes: Agent
 detects new parameters in PR, updates test suite automatically"). It shows
 the full PR-in / tests-out loop end-to-end against a real third-party API,
 using nothing but composition (SDK + the `api-qa-conventions` skill).
+
+<!-- e2e automation test: GPT-5.5 model -->
