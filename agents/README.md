@@ -1,5 +1,20 @@
 # agents/
 
+> **These scripts are used by the GitHub Actions workflow (`qa.yml`) only.**
+> They are NOT used by the OpenHands Automation.
+>
+> The demo has two independent QA trigger paths:
+>
+> | Path | What starts the conversation |
+> |---|---|
+> | **OpenHands Automation** (primary demo) | The automation's own prompt in `automations/build_prompt.py` — runs entirely inside the sandbox, no external script needed |
+> | **GitHub Actions** (reference implementation) | `qa.yml` calls `api_qa_agent.py` / `ui_qa_agent.py` from this folder on an Actions runner |
+>
+> If you're exploring the demo trigger architecture, start with
+> [`automations/README.md`](../automations/README.md).
+> This folder only matters if you're working on the Actions path or want
+> to kick off a conversation manually from your laptop.
+
 Conversation-starter scripts. They run **outside** the OpenHands sandbox
 and POST a self-contained task prompt to the V1 Conversation API. The
 conversation that gets started does the actual QA work inside its own
@@ -10,6 +25,9 @@ sandbox.
 | `_client.py` | Tiny V1 API client (httpx). Reads `OPENHANDS_API_KEY` from env. |
 | `api_qa_agent.py` | Starts a conversation for Scenarios 1 and 2 (API). |
 | `ui_qa_agent.py` | Starts a conversation for Scenario 3 (UI). |
+| `fetch_artifacts.py` | After a conversation finishes, pulls generated files out of the sandbox so Actions can commit them. |
+| `runs.py` | Local `runs.jsonl` ledger — tracks conversation IDs, cost, and duration. |
+| `_ci.py` | Helpers for writing to `$GITHUB_OUTPUT` so Actions can pass values between steps. |
 
 ## How they work
 
