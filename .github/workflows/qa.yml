@@ -57,21 +57,26 @@ jobs:
         id: scenario
         env:
           INPUT_SCENARIO: ${{ inputs.scenario }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -n "${INPUT_SCENARIO:-}" ]]; then
             scenario="$INPUT_SCENARIO"
-          else
-            # Find which scenario folder the PR touched the most.
-            git fetch --no-tags --depth=50 origin "$PR_BASE_SHA"
-            changed=$(git diff --name-only "$PR_BASE_SHA" "$PR_HEAD_SHA" || true)
+          elif [[ -n "${PR_NUMBER:-}" ]]; then
+            # Ask the GitHub API which files this PR touches, then pick the
+            # most-affected scenarios/<N>_<name>/ folder. Avoids any local
+            # git history dependence.
+            changed=$(gh pr view "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json files --jq '.files[].path')
             scenario=$(echo "$changed" \
               | grep -oE '^scenarios/[0-9]+_[a-z_]+' \
               | sort | uniq -c | sort -rn | head -1 \
               | awk '{print $2}')
             scenario=${scenario:-scenarios/01_api_pr_update}
+          else
+            scenario=scenarios/01_api_pr_update
           fi
 
           case "$scenario" in

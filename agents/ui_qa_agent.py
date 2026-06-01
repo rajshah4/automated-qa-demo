@@ -48,6 +48,9 @@ def _build_prompt(scenario_dir: Path) -> str:
 
     generated_specs_rel = scenario_rel / "generated_specs"
     recordings_rel = scenario_rel / "recordings"
+    config_rel = scenario_rel / "playwright.config.ts"
+    report_rel = scenario_rel / "playwright-report"
+    results_rel = scenario_rel / "test-results"
 
     return textwrap.dedent(
         f"""\
@@ -56,15 +59,15 @@ def _build_prompt(scenario_dir: Path) -> str:
         ## Your task
 
         Drive a real browser through the workflow described at
-        `{workflow_rel}`, then emit a maintainable Playwright spec the QA
-        team will keep.
+        `{workflow_rel}`, emit a maintainable Playwright spec the QA team
+        will keep, and produce the rich artifacts a QA lead expects: HTML
+        report, trace files (for time-travel debugging), per-test videos,
+        and on-failure screenshots.
 
         1. Read `AGENTS.md` at the repo root for general project guidance.
         2. Read **both** skills before touching any code:
            - `skills/webapp-testing/SKILL.md` — runtime pattern for driving
-             the browser (reconnaissance-then-action). Use the bundled
-             `scripts/with_server.py` helper if you need a local server,
-             though for this scenario the SUT is public.
+             the browser (reconnaissance-then-action).
            - `skills/front-end-testing/SKILL.md` — the quality bar for the
              spec you emit. Accessibility-first queries, idempotency, no
              `getByTestId` unless nothing else works.
@@ -72,42 +75,74 @@ def _build_prompt(scenario_dir: Path) -> str:
 
         ## What to do
 
-        a. Drive the workflow live, using Playwright (sync API, headless
-           Chromium). Wait for `networkidle` after each navigation. Use
-           reconnaissance (screenshots, DOM inspection) to identify the
-           right selectors before acting.
+        a. **Playwright config.** Create `{config_rel}` with these settings
+           so the run produces canonical QA artifacts. Use
+           `@playwright/test`'s `defineConfig`:
 
-        b. Record the entire browser session as rrweb output. Place the
-           recording artifact under `{recordings_rel}/`. Name it
-           `checkout-backpack.rrweb.json` (or `.zip` if you bundle multiple
-           events files). Also save a screenshot of the final
-           confirmation page as `{recordings_rel}/checkout-backpack-final.png`.
+           ```ts
+           import {{ defineConfig, devices }} from '@playwright/test';
+           export default defineConfig({{
+             testDir: './generated_specs',
+             fullyParallel: true,
+             reporter: [
+               ['list'],
+               ['html', {{ outputFolder: 'playwright-report', open: 'never' }}],
+             ],
+             use: {{
+               trace: 'on',                 // time-travel debugging for every test
+               video: 'on',                 // per-test video
+               screenshot: 'only-on-failure',
+               actionTimeout: 15_000,
+             }},
+             projects: [
+               {{ name: 'chromium', use: {{ ...devices['Desktop Chrome'] }} }},
+             ],
+           }});
+           ```
 
-        c. Emit a standalone Playwright spec at
-           `{generated_specs_rel}/checkout-backpack.spec.ts`. The spec must:
-           - Use TypeScript and the `@playwright/test` runner.
-           - Be runnable on its own with `npx playwright test`.
-           - Follow the front-end-testing skill's query priority.
-           - Be **idempotent** — no shared state between runs.
-           - Include a brief header comment that links back to
-             `{workflow_rel}` so future maintainers know the source of truth.
+           The agent that runs the tests must use this config. Run with:
+           `cd {scenario_rel} && npx playwright test`
 
-        d. Re-run the generated spec from scratch with
-           `npx playwright test {generated_specs_rel}/checkout-backpack.spec.ts`
-           to confirm it passes outside of your live driving.
+        b. **Drive the workflow live first** (sync Playwright API or the
+           browser tool) to do reconnaissance. Wait for `networkidle` after
+           each navigation. Identify the right selectors before writing
+           assertions.
 
-        e. If you have time after the happy path passes, add one extra spec
-           covering an edge case from the workflow's "Edge cases" section
-           (e.g. the `locked_out_user` failure mode). Pick the most
-           informative one. Keep this spec in the same folder.
+        c. **Emit a standalone happy-path spec** at
+           `{generated_specs_rel}/checkout-backpack.spec.ts`:
+           - TypeScript + `@playwright/test`.
+           - Follows the front-end-testing skill's query priority.
+           - Idempotent (no shared state between tests).
+           - Header comment links back to `{workflow_rel}`.
 
-        f. Write a markdown report to `/tmp/qa-report.md` containing:
-           - The scenario name
-           - The generated spec file paths (relative to the repo)
-           - The recording file path
-           - The Playwright run summary
-           - A short paragraph explaining design decisions (why these
-             selectors, which edge case you chose and why)
+        d. **Add one edge-case spec** in the same folder covering an entry
+           from the workflow's "Edge cases" section. Pick the most
+           informative one and explain the choice in the spec's header
+           comment and in the report.
+
+        e. **Run the suite** via `cd {scenario_rel} && npx playwright test`.
+           This will populate `{report_rel}/` (HTML report) and
+           `{results_rel}/` (per-test traces, videos, screenshots) — these
+           are the primary artifacts the QA team will look at.
+
+        f. **(Optional, only if time allows)** Capture an rrweb session for
+           the happy path at `{recordings_rel}/checkout-backpack.rrweb.json`
+           and a final screenshot at
+           `{recordings_rel}/checkout-backpack-final.png`. These are
+           supplementary (stakeholder-friendly replay); the Playwright
+           report and traces are the canonical engineering artifacts and
+           must be present even if you skip rrweb.
+
+        g. **Write the report** to `/tmp/qa-report.md` containing:
+           - The scenario name.
+           - The generated spec file paths.
+           - **Where to find the rich artifacts** — explicitly mention
+             `{report_rel}/index.html` and how to open trace files with
+             `npx playwright show-trace {results_rel}/<test>/trace.zip` (or
+             via `https://trace.playwright.dev/`).
+           - The Playwright run summary (pass/fail counts, duration).
+           - Short paragraph on design decisions (selector strategy, why
+             you picked the edge case you did).
 
         ## What NOT to do
 
@@ -116,8 +151,9 @@ def _build_prompt(scenario_dir: Path) -> str:
         - Do not add a CI workflow file; the demo wires that up separately.
         - Do not introduce visual regression assertions.
 
-        When `/tmp/qa-report.md` is written and the Playwright run summary
-        appears in your final response, you are done.
+        When `/tmp/qa-report.md` is written, `{report_rel}/index.html`
+        exists, and the Playwright run summary appears in your final
+        response, you are done.
         """
     )
 

@@ -9,12 +9,28 @@ records the session, and posts the video + results to the PR.
 ```
 03_ui_workflow/
 ├── workflow.md             # The natural-language workflow to test
+├── playwright.config.ts    # Created by the agent on first run
 ├── generated_specs/        # The agent writes spec files here
 │   └── .gitkeep
-├── recordings/             # rrweb session recordings land here
+├── playwright-report/      # HTML report — headline QA artifact
+│   └── .gitkeep
+├── test-results/           # Per-test trace.zip, video.webm, screenshots
+│   └── .gitkeep
+├── recordings/             # Optional: rrweb session recording
 │   └── .gitkeep
 └── README.md
 ```
+
+The Playwright config is set up so every test produces:
+
+- A **trace file** (`test-results/<test>/trace.zip`) — drop into
+  [`trace.playwright.dev`](https://trace.playwright.dev/) or run
+  `npx playwright show-trace` for time-travel debugging (DOM
+  snapshots, network log, console, source-mapped actions).
+- A **video** of the run (`video.webm`).
+- A **screenshot** on failure.
+
+Plus a navigable **HTML report** at `playwright-report/index.html`.
 
 There is no application code in this scenario — the system under test is
 the public [saucedemo.com](https://www.saucedemo.com/v1/) site.

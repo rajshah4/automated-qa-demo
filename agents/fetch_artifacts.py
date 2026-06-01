@@ -129,10 +129,16 @@ def fetch(conversation_id: str, dest: Path) -> int:
         print(f"  OK    git status     →  git-status.txt  ({len(status)} B)")
         saved += 1
 
-        # ---------------- Untracked files under scenarios/ ----------------
-        # These are files the agent created from scratch (e.g. UI specs,
-        # recordings, brand-new test_*.py files). We list them and pull
-        # each one. .gitkeep placeholders are skipped.
+        # ---------------- New artifacts under scenarios/ ----------------
+        # Two sources of truth for "what did the agent produce":
+        #   a) git ls-files --others — files the agent created in dirs that
+        #      are tracked (e.g. new test_*.py, new .spec.ts).
+        #   b) Well-known output directories that are gitignored at runtime
+        #      (playwright-report, test-results, generated_specs, recordings)
+        #      — we pull everything inside them regardless of git state.
+        #
+        # Doing both means we capture both "untracked test files the agent
+        # wrote" and "build outputs from running the tests."
         print("\n--- New artifacts under scenarios/ ---")
         new_files = _bash(
             sb,
@@ -140,13 +146,33 @@ def fetch(conversation_id: str, dest: Path) -> int:
             "git ls-files --others --exclude-standard scenarios/ | "
             "grep -v '/.gitkeep$' || true",
         ).strip()
-        if not new_files:
+
+        artifact_dirs = [
+            "playwright-report",
+            "test-results",
+            "generated_specs",
+            "recordings",
+        ]
+        # find with OR-joined -path predicates, parenthesised so the
+        # ! -name filter applies to the whole group.
+        find_cmd = (
+            f"cd {repo_path} && find scenarios -type f \\( "
+            + " -o ".join(f"-path '*/{d}/*'" for d in artifact_dirs)
+            + " \\) ! -name '.gitkeep' 2>/dev/null"
+        )
+        dir_files = _bash(sb, find_cmd).strip()
+
+        # Merge both sources, dedupe.
+        candidates: set[str] = set()
+        for rel in (new_files + "\n" + dir_files).splitlines():
+            rel = rel.strip()
+            if rel and not rel.endswith("/.gitkeep"):
+                candidates.add(rel)
+
+        if not candidates:
             print("  (none)")
         else:
-            for rel in new_files.splitlines():
-                rel = rel.strip()
-                if not rel:
-                    continue
+            for rel in sorted(candidates):
                 blob = _download(sb, f"{repo_path}/{rel}")
                 _save(dest / rel, blob, rel)
                 if blob is not None:
