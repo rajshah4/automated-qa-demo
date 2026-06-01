@@ -28,11 +28,11 @@ on:
       - 'scenarios/**'
       - 'skills/**'
       - 'AGENTS.md'
-    paths-ignore:
       # Belt-and-suspenders alongside [skip ci] in the auto-commit message:
       # the workflow itself pushes preview GIFs back to the PR branch.
-      # If GitHub ever ignores [skip ci] we still won't recurse.
-      - 'scenarios/*/recordings/preview-*.gif'
+      # The leading '!' excludes these files from triggering the workflow
+      # even though they live under scenarios/**.
+      - '!scenarios/*/recordings/preview-*.gif'
 
 jobs:
   qa:
