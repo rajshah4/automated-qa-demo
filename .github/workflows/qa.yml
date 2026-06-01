@@ -183,27 +183,36 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH:   ${{ github.head_ref }}
           REPO:     ${{ github.repository }}
+          CONVERSATION_ID: ${{ steps.agent.outputs.conversation_id }}
+          GIF_LOCAL:     ${{ steps.gif_build.outputs.gif_local }}
+          GIF_REPO_PATH: ${{ steps.gif_build.outputs.gif_repo_path }}
         run: |
           set -euo pipefail
-          gif_local='${{ steps.gif_build.outputs.gif_local }}'
-          gif_repo_path='${{ steps.gif_build.outputs.gif_repo_path }}'
 
-          # Base64-encode the GIF (no line wrapping) for the Contents API.
-          content=$(base64 -w0 < "$gif_local")
+          # Base64-encode to a file (no line wrap, no trailing newline).
+          # Then build the JSON payload with jq's --rawfile so neither
+          # the encoded content nor the JSON itself ever shows up on the
+          # command line — avoids the ARG_MAX limit that bit the earlier
+          # `gh api -f content=$content` form.
+          base64 -w0 < "$GIF_LOCAL" > .qa-tmp/preview.b64
+          jq -n \
+            --arg message "ci(qa): preview GIF for $CONVERSATION_ID [skip ci]" \
+            --arg branch  "$BRANCH" \
+            --rawfile content .qa-tmp/preview.b64 \
+            '{message: $message, content: $content, branch: $branch}' \
+            > .qa-tmp/payload.json
 
-          # Each conversation has a unique id so this is always a CREATE,
-          # no need to look up an existing sha. [skip ci] in the commit
+          # Each conversation has a unique id so this is always a CREATE
+          # — no need to look up an existing sha. [skip ci] in the commit
           # message prevents the push from re-triggering this workflow.
-          resp=$(gh api -X PUT "/repos/$REPO/contents/$gif_repo_path" \
-            -f message="ci(qa): preview GIF for ${{ steps.agent.outputs.conversation_id }} [skip ci]" \
-            -f content="$content" \
-            -f branch="$BRANCH")
+          resp=$(gh api -X PUT "/repos/$REPO/contents/$GIF_REPO_PATH" \
+                   --input .qa-tmp/payload.json)
 
           new_sha=$(echo "$resp" | jq -r '.commit.sha')
-          echo "Committed $gif_repo_path on $BRANCH @ $new_sha"
+          echo "Committed $GIF_REPO_PATH on $BRANCH @ $new_sha"
 
           # Pin the URL to the new commit SHA so it survives branch deletion.
-          raw_url="https://raw.githubusercontent.com/$REPO/$new_sha/$gif_repo_path"
+          raw_url="https://raw.githubusercontent.com/$REPO/$new_sha/$GIF_REPO_PATH"
           echo "raw_url=$raw_url" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------------
