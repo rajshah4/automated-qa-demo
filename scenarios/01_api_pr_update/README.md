@@ -42,33 +42,23 @@ pytest
 
 ## What the agent does
 
-The `api_qa_agent` (see [`agents/api_qa_agent.py`](../../agents/api_qa_agent.py))
-is invoked with:
+The OpenHands Automation detects this scenario from the changed files, reads
+`AGENTS.md` and the `api-qa-conventions` skill, then:
 
-- The PR diff (`pr/add-region-and-max-results.patch`)
-- The PR description (`pr/PR_DESCRIPTION.md`)
-- Read/write access to `service/` and `service/tests/`
-- The `api-qa-conventions` skill loaded (defines how tests should be written)
-
-Following the skill's "When you update tests in response to a PR diff"
-section, the agent will:
-
-1. Identify `service/tests/test_search.py` as the affected file.
-2. Add tests for the happy path with both new params.
-3. Add validation tests for `regionCode` (length checks) and `maxResults`
+1. Identifies `service/tests/test_search.py` as the affected file.
+2. Adds tests for the happy path with both new params.
+3. Adds validation tests for `regionCode` (length checks) and `maxResults`
    (range checks).
-4. Leave the other test files untouched (the diff doesn't affect them).
-5. Run the suite and post the result to the PR.
+4. Leaves other test files untouched.
+5. Commits the updated test file to the PR branch and posts a results comment.
 
-## How to run the agent against this scenario
+## How to trigger
 
-> Wired up once `agents/api_qa_agent.py` lands in Phase 6.
+Open a PR from a branch that touches this scenario, then apply the
+`openhands-qa` label - the automation fires within ~2 seconds:
 
 ```bash
-python -m agents.api_qa_agent \
-    --scenario scenarios/01_api_pr_update \
-    --pr-diff scenarios/01_api_pr_update/pr/add-region-and-max-results.patch \
-    --pr-description scenarios/01_api_pr_update/pr/PR_DESCRIPTION.md
+gh pr edit <number> --add-label "openhands-qa"
 ```
 
 ## Why this scenario matters for the demo

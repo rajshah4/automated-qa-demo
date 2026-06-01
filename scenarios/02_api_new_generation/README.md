@@ -46,9 +46,9 @@ cd scenarios/01_api_pr_update
 patch -p1 < ../02_api_new_generation/pr/add-playlists-endpoint.patch
 
 # Then run the agent (wired up once Phase 6 lands)
-python -m agents.api_qa_agent \
-    --scenario scenarios/02_api_new_generation \
-    --service scenarios/01_api_pr_update/service \
-    --pr-diff scenarios/02_api_new_generation/pr/add-playlists-endpoint.patch \
-    --pr-description scenarios/02_api_new_generation/pr/PR_DESCRIPTION.md
+gh pr edit <number> --add-label "openhands-qa"
 ```
+
+The automation detects scenario 02 from the branch name or changed files,
+generates `test_playlists.py` from scratch, commits it to the branch, and
+posts a results comment.

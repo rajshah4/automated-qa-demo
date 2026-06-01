@@ -4,8 +4,7 @@ This directory documents the OpenHands Automation that runs the QA workflow
 whenever a PR on `rajshah4/automated-qa-demo` is labeled with `openhands-qa`.
 
 It is the **primary demo architecture** — the mechanism a customer would deploy.
-The GitHub Actions workflow (`qa.yml`) is retained as a reference implementation
-showing the same QA work driven from CI YAML; it is not the focus of the demo.
+There is no separate CI workflow — the Automation is the only trigger.
 
 ---
 
@@ -40,8 +39,8 @@ showing the same QA work driven from CI YAML; it is not the focus of the demo.
    truth for how tests are written. No hardcoded logic in the automation prompt.
 
 4. **Runs the QA work** — follows the exact same task specification as
-   `agents/api_qa_agent.py` (`_build_prompt`) or `agents/ui_qa_agent.py`
-   (`_build_prompt`), depending on the detected scenario.
+   `automations/build_prompt.py`, reading the task specification from the
+   skills and the scenario folder, depending on the detected scenario.
 
 5. **Commits artifacts back to the PR branch** — generated test files, Playwright
    specs, `playwright.config.ts`, and GIF previews (converted from `.webm`
@@ -99,21 +98,6 @@ the 🤖 comment.
 
 ---
 
-## Comparison with the GitHub Actions path
-
-| | OpenHands Automation | GitHub Actions (`qa.yml`) |
-|---|---|---|
-| **Trigger** | `pull_request.labeled` (`openhands-qa`) via event webhook | `pull_request` workflow event (any PR) |
-| **QA work runs in** | OpenHands conversation sandbox | OpenHands conversation sandbox |
-| **Scenario detection** | File paths primary; branch name tiebreaker | Shell script using `gh pr view` |
-| **Artifacts committed** | ✅ test files, specs, GIF previews — pushed to PR branch | ✅ GIF preview — pushed to PR branch |
-| **PR comment** | 🤖 Full report + collapsible file contents + inline GIFs | ✅ Status table + conversation link + one GIF |
-| **qa-report.md** | ✅ Embedded inline (collapsible) | In downloadable artifact bundle |
-| **Full recording (.webm)** | Not uploaded | Actions artifact (30-day retention) |
-| **Config to maintain** | Automation prompt in the OpenHands service | `qa.yml` YAML |
-
----
-
 ## Re-registering the automation
 
 If the automation needs to be recreated from scratch, the prompt is maintained
@@ -145,9 +129,9 @@ curl -s -X PATCH \
   --data-binary @/tmp/patch.json | python3 -m json.tool
 ```
 
-The prompt is a meta-prompt: it reads `agents/api_qa_agent.py` and
-`agents/ui_qa_agent.py` at run time to get the current task specification,
-so updating those scripts updates the QA work without touching the automation.
+The prompt in `automations/build_prompt.py` is the single source of truth
+for what work the automation does. Edit it there and run the PATCH command above
+to push the update live.
 
 ---
 

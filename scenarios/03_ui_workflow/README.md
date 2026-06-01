@@ -74,10 +74,12 @@ not a slide deck.
 
 ```bash
 # Wired up once Phase 6 lands.
-python -m agents.ui_qa_agent \
-    --scenario scenarios/03_ui_workflow \
-    --workflow scenarios/03_ui_workflow/workflow.md
+gh pr edit <number> --add-label "openhands-qa"
 ```
+
+The automation drives a real Chromium browser, generates Playwright specs,
+records sessions as GIF previews, commits everything to the branch, and
+posts a results comment with inline GIF replays.
 
 ## Out of scope (deliberately)
 
