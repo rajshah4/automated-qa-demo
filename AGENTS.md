@@ -48,6 +48,36 @@ before doing any work.
 - Never commit secrets. The YouTube API key and any GitHub token come from
   the sandbox's environment.
 
+## Creating a demo PR (human-triggered setup task)
+
+When asked to "create a demo PR" or "set up a PR for scenario N":
+
+1. **Feature change only — no tests.** The whole point of the demo is that the
+   automation adds the tests. A demo PR must contain only the production code
+   change (`service/app.py`). Never commit test file changes in this step.
+
+2. **Apply the canned patch for the scenario:**
+   - Scenario 01: `patch -p1 < scenarios/01_api_pr_update/pr/add-region-and-max-results.patch`
+     (run from repo root)
+   - Scenario 02: `patch -p1 < scenarios/02_api_new_generation/pr/add-playlists-endpoint.patch`
+     (run from repo root, applies on top of scenario 01's service)
+
+3. **Branch naming:** `demo/<short-slug>`, e.g. `demo/search-region-maxresults`.
+
+4. **PR description** must describe only the feature change — what the new
+   parameters do, their types/constraints, and what HTTP status invalid values
+   return. Do not mention tests or the QA agent. Copy the style from the
+   scenario's own `pr/PR_DESCRIPTION.md`.
+
+5. **Apply the `openhands-qa` label** after the PR is open. This is the trigger
+   for the automation. Create the label first if it doesn't exist:
+   `gh label create "openhands-qa" --color "0075ca" --description "Trigger OpenHands automated QA"`
+
+6. **Do not run tests** during this setup step. Tests are the automation's job.
+
+**Fastest correct invocation:**
+> "Create the demo PR for scenario 01. Feature change only, openhands-qa label, no tests."
+
 ## Where to learn more
 
 - The top-level [`README.md`](./README.md) is the customer-facing pitch.
