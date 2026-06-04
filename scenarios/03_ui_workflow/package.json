@@ -1,0 +1,16 @@
+{
+  "name": "03_ui_workflow",
+  "version": "1.0.0",
+  "description": "**The QA goal:** given a natural-language workflow description, the agent drives a real browser, generates a maintainable Playwright spec, runs it, records the session, and posts the video + results to the PR.",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --reporter=list"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
+}

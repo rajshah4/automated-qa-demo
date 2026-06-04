@@ -75,6 +75,14 @@ of these (the agent picks the most informative one):
   should read the price text from each `.inventory_item_price` element
   after sorting and assert the list is non-decreasing.
 
+- **Remove item from cart before checkout** — a logged-in user adds the
+  **Sauce Labs Backpack** to the cart, navigates to the cart page, then
+  clicks **Remove**. After removal: the cart badge must disappear entirely
+  (it is only rendered when count > 0), the item must no longer appear in
+  the cart item list, and the **Checkout** button must still be visible.
+  This guards against regressions where the remove action updates server
+  state but the UI fails to re-render the empty-cart state.
+
 ## Out of scope
 
 - Visual regression testing.
