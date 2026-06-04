@@ -30,6 +30,27 @@ def test_search_default_params_returns_results(client):
         assert item["title"]
 
 
+def test_search_with_region_code_filters_results(client):
+    response = client.get("/search", params={"q": "news", "regionCode": "US"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) > 0
+    for item in body["items"]:
+        assert set(item.keys()) == {"videoId", "title", "channelTitle", "publishedAt"}
+        assert item["videoId"]
+
+
+def test_search_with_max_results_limits_returned_items(client):
+    response = client.get("/search", params={"q": "python", "maxResults": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 3
+
+
 # -----------------------------------------------------------------------------
 # Validation
 # -----------------------------------------------------------------------------
@@ -43,6 +64,34 @@ def test_search_missing_query_param_returns_422(client):
 
 def test_search_empty_query_param_returns_422(client):
     response = client.get("/search", params={"q": ""})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_short_returns_422(client):
+    # regionCode must be exactly 2 characters; 1 char is invalid.
+    response = client.get("/search", params={"q": "test", "regionCode": "U"})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_long_returns_422(client):
+    # regionCode must be exactly 2 characters; 3 chars is invalid.
+    response = client.get("/search", params={"q": "test", "regionCode": "USA"})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_too_low_returns_422(client):
+    # maxResults must be >= 1; 0 is invalid.
+    response = client.get("/search", params={"q": "test", "maxResults": 0})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_too_high_returns_422(client):
+    # maxResults must be <= 50; 51 is invalid.
+    response = client.get("/search", params={"q": "test", "maxResults": 51})
 
     assert response.status_code == 422
 
