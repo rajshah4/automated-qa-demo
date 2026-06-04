@@ -30,6 +30,36 @@ def test_search_default_params_returns_results(client):
         assert item["title"]
 
 
+def test_search_with_max_results_limits_response_count(client):
+    response = client.get("/search", params={"q": "python programming", "maxResults": 5})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 5
+
+
+def test_search_with_region_code_returns_results(client):
+    response = client.get("/search", params={"q": "news", "regionCode": "US"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) > 0
+    for item in body["items"]:
+        assert set(item.keys()) == {"videoId", "title", "channelTitle", "publishedAt"}
+        assert item["videoId"]
+
+
+def test_search_with_region_code_and_max_results_combined(client):
+    response = client.get("/search", params={"q": "music", "regionCode": "GB", "maxResults": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 3
+
+
 # -----------------------------------------------------------------------------
 # Validation
 # -----------------------------------------------------------------------------
@@ -43,6 +73,34 @@ def test_search_missing_query_param_returns_422(client):
 
 def test_search_empty_query_param_returns_422(client):
     response = client.get("/search", params={"q": ""})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_below_minimum_returns_422(client):
+    # maxResults must be >= 1; 0 should be rejected.
+    response = client.get("/search", params={"q": "openhands", "maxResults": 0})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_above_maximum_returns_422(client):
+    # maxResults must be <= 50; 51 should be rejected.
+    response = client.get("/search", params={"q": "openhands", "maxResults": 51})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_short_returns_422(client):
+    # regionCode must be exactly 2 characters; 1 char should be rejected.
+    response = client.get("/search", params={"q": "openhands", "regionCode": "U"})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_long_returns_422(client):
+    # regionCode must be exactly 2 characters; 3 chars should be rejected.
+    response = client.get("/search", params={"q": "openhands", "regionCode": "USA"})
 
     assert response.status_code == 422
 
