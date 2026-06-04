@@ -52,26 +52,55 @@ before doing any work.
 
 When asked to "create a demo PR" or "set up a PR for scenario N":
 
+### Background: why a base branch is needed
+
+`main` already contains the feature code from previous demo runs. To produce a
+meaningful PR diff (which the QA automation reads), each scenario has a
+permanent base branch that is pinned to the pre-feature commit:
+
+| Scenario | Base branch | Pinned commit |
+|---|---|---|
+| 01 | `demo-base/01` | `c943c99` |
+| 02 | `demo-base/02` | _(same as 01 base, after 01 patch)_ |
+
+Open every demo PR against its base branch, **not** `main`.
+
+### Steps
+
 1. **Feature change only — no tests.** The whole point of the demo is that the
    automation adds the tests. A demo PR must contain only the production code
    change (`service/app.py`). Never commit test file changes in this step.
 
-2. **Apply the canned patch for the scenario:**
-   - Scenario 01: `patch -p1 < scenarios/01_api_pr_update/pr/add-region-and-max-results.patch`
-     (run from repo root)
-   - Scenario 02: `patch -p1 < scenarios/02_api_new_generation/pr/add-playlists-endpoint.patch`
-     (run from repo root, applies on top of scenario 01's service)
+2. **Set up the base branch** (skip if it already exists on the remote):
+   ```bash
+   git checkout c943c99 -b demo-base/01
+   git push -u origin demo-base/01
+   git checkout main
+   ```
 
-3. **Branch naming:** `demo/<short-slug>`, e.g. `demo/search-region-maxresults`.
+3. **Create the feature branch from the base and apply the patch:**
+   ```bash
+   # Scenario 01
+   git checkout demo-base/01 -b demo/search-region-maxresults
+   cd scenarios/01_api_pr_update && patch -p1 < pr/add-region-and-max-results.patch && cd ../..
+   git add scenarios/01_api_pr_update/service/app.py
+   git commit -m "feat(search): add regionCode and maxResults to GET /search"
+   git push -u origin demo/search-region-maxresults --force
+   ```
+   *(Force-push is expected — demo branches are reused across runs.)*
 
-4. **PR description** must describe only the feature change — what the new
-   parameters do, their types/constraints, and what HTTP status invalid values
-   return. Do not mention tests or the QA agent. Copy the style from the
-   scenario's own `pr/PR_DESCRIPTION.md`.
+4. **Open the PR** targeting `demo-base/01` (not `main`). Copy the PR
+   description from `scenarios/01_api_pr_update/pr/PR_DESCRIPTION.md`.
 
-5. **Apply the `openhands-qa` label** after the PR is open. This is the trigger
-   for the automation. Create the label first if it doesn't exist:
-   `gh label create "openhands-qa" --color "0075ca" --description "Trigger OpenHands automated QA"`
+5. **Apply the `openhands-qa` label** immediately after opening the PR — this
+   is the trigger for the automation:
+   ```bash
+   gh pr edit <PR_NUMBER> --repo <owner>/automated-qa-demo --add-label "openhands-qa"
+   ```
+   Create the label first if it doesn't exist:
+   ```bash
+   gh label create "openhands-qa" --color "0E8A16" --description "Trigger OpenHands Automation QA run"
+   ```
 
 6. **Do not run tests** during this setup step. Tests are the automation's job.
 
