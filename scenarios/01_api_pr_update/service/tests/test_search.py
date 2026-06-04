@@ -72,3 +72,66 @@ def test_search_upstream_quota_exceeded_returns_502(client, youtube_api_key):
     response = client.get("/search", params={"q": "openhands"})
 
     assert response.status_code == 502
+
+
+# -----------------------------------------------------------------------------
+# New params: regionCode and maxResults (added in PR #25)
+# -----------------------------------------------------------------------------
+
+def test_search_with_region_code_returns_results(client):
+    response = client.get("/search", params={"q": "youtube", "regionCode": "US"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) > 0
+    for item in body["items"]:
+        assert set(item.keys()) == {"videoId", "title", "channelTitle", "publishedAt"}
+        assert item["videoId"]
+
+
+def test_search_with_max_results_limits_count(client):
+    response = client.get("/search", params={"q": "python", "maxResults": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 3
+
+
+def test_search_with_region_code_and_max_results_returns_results(client):
+    response = client.get("/search", params={"q": "music", "regionCode": "GB", "maxResults": 5})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 5
+    for item in body["items"]:
+        assert set(item.keys()) == {"videoId", "title", "channelTitle", "publishedAt"}
+
+
+def test_search_region_code_too_short_returns_422(client):
+    # regionCode requires exactly 2 chars (ISO 3166-1 alpha-2).
+    response = client.get("/search", params={"q": "test", "regionCode": "U"})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_long_returns_422(client):
+    response = client.get("/search", params={"q": "test", "regionCode": "USA"})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_zero_returns_422(client):
+    # maxResults must be >= 1.
+    response = client.get("/search", params={"q": "test", "maxResults": 0})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_above_maximum_returns_422(client):
+    # maxResults must be <= 50.
+    response = client.get("/search", params={"q": "test", "maxResults": 51})
+
+    assert response.status_code == 422
