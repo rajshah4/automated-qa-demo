@@ -63,6 +63,20 @@ def _call_youtube(path: str, params: dict[str, Any]) -> dict[str, Any]:
 @app.get("/search")
 def search(
     q: str = Query(..., min_length=1, description="Search query"),
+    region_code: str | None = Query(
+        None,
+        alias="regionCode",
+        min_length=2,
+        max_length=2,
+        description="2-letter ISO 3166-1 alpha-2 country code to restrict results to.",
+    ),
+    max_results: int = Query(
+        25,
+        alias="maxResults",
+        ge=1,
+        le=50,
+        description="Number of results to return (1-50). Defaults to 25.",
+    ),
 ) -> dict[str, Any]:
     """
     Search YouTube for videos matching `q`.
@@ -70,10 +84,16 @@ def search(
     Returns a normalized response shape — callers should not depend on the
     raw YouTube response.
     """
-    upstream = _call_youtube(
-        "/search",
-        {"q": q, "part": "snippet", "type": "video"},
-    )
+    upstream_params: dict[str, Any] = {
+        "q": q,
+        "part": "snippet",
+        "type": "video",
+        "maxResults": max_results,
+    }
+    if region_code:
+        upstream_params["regionCode"] = region_code
+
+    upstream = _call_youtube("/search", upstream_params)
 
     return {
         "items": [
