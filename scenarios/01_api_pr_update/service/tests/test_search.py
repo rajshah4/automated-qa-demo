@@ -30,6 +30,49 @@ def test_search_default_params_returns_results(client):
         assert item["title"]
 
 
+def test_search_with_region_code_returns_results(client):
+    response = client.get("/search", params={"q": "python", "regionCode": "US"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) > 0
+    for item in body["items"]:
+        assert set(item.keys()) == {"videoId", "title", "channelTitle", "publishedAt"}
+        assert item["videoId"]
+
+
+def test_search_with_max_results_limits_count(client):
+    response = client.get("/search", params={"q": "python", "maxResults": 5})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 5
+
+
+def test_search_default_max_results_is_25(client):
+    response = client.get("/search", params={"q": "python tutorial"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    # Default maxResults is 25; upstream may return up to 25 items.
+    assert len(body["items"]) <= 25
+
+
+def test_search_with_region_code_and_max_results(client):
+    response = client.get("/search", params={"q": "music", "regionCode": "GB", "maxResults": 3})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert len(body["items"]) <= 3
+    for item in body["items"]:
+        assert item["videoId"]
+        assert item["title"]
+
+
 # -----------------------------------------------------------------------------
 # Validation
 # -----------------------------------------------------------------------------
@@ -43,6 +86,33 @@ def test_search_missing_query_param_returns_422(client):
 
 def test_search_empty_query_param_returns_422(client):
     response = client.get("/search", params={"q": ""})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_short_returns_422(client):
+    # regionCode requires exactly 2 characters (min_length=2, max_length=2).
+    response = client.get("/search", params={"q": "python", "regionCode": "U"})
+
+    assert response.status_code == 422
+
+
+def test_search_region_code_too_long_returns_422(client):
+    response = client.get("/search", params={"q": "python", "regionCode": "USA"})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_below_minimum_returns_422(client):
+    # maxResults must be >= 1.
+    response = client.get("/search", params={"q": "python", "maxResults": 0})
+
+    assert response.status_code == 422
+
+
+def test_search_max_results_above_maximum_returns_422(client):
+    # maxResults must be <= 50.
+    response = client.get("/search", params={"q": "python", "maxResults": 51})
 
     assert response.status_code == 422
 
