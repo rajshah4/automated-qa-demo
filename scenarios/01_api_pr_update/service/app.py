@@ -164,3 +164,31 @@ def get_channel(channel_id: str) -> dict[str, Any]:
         "subscriberCount": int(stats.get("subscriberCount", 0)),
         "videoCount": int(stats.get("videoCount", 0)),
     }
+
+
+# -----------------------------------------------------------------------------
+# /playlists/{playlist_id}
+# -----------------------------------------------------------------------------
+
+@app.get("/playlists/{playlist_id}")
+def get_playlist(playlist_id: str) -> dict[str, Any]:
+    """Get details for a single playlist by ID."""
+    upstream = _call_youtube(
+        "/playlists",
+        {"id": playlist_id, "part": "snippet,contentDetails"},
+    )
+
+    items = upstream.get("items", [])
+    if not items:
+        raise HTTPException(status_code=404, detail=f"Playlist {playlist_id!r} not found")
+
+    item = items[0]
+    snippet = item["snippet"]
+    content_details = item.get("contentDetails", {})
+    return {
+        "playlistId": item["id"],
+        "title": snippet["title"],
+        "description": snippet["description"],
+        "channelTitle": snippet["channelTitle"],
+        "itemCount": int(content_details.get("itemCount", 0)),
+    }
